@@ -28,7 +28,7 @@
       width: 220px;
       height: 260px;
       pointer-events: auto;
-      z-index: -999;
+      z-index: 999;
     }
 
     /* Character “stands” above the (scaled) trampoline */
@@ -60,6 +60,7 @@
       width: 200px;
       height: var(--tramp-height);
       cursor: pointer;
+      z-index: -999; //Changed attempt remove if everything breaks
     }
 
     /* Make SVGs fill their containers */
@@ -248,6 +249,7 @@
   </script>
 </body>
 </html>
+
 
 
 
