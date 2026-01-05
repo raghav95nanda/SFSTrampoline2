@@ -10,7 +10,7 @@
       --tramp-scale: 0.9;      /* trampoline size */
 
       --tramp-height: 120px;   /* logical trampoline height (before scale) */
-      --char-gap: -120px;        /* gap between top of trampoline & character feet */
+      --char-gap: -80px;        /* gap between top of trampoline & character feet */
     }
 
     body {
@@ -28,7 +28,7 @@
       width: 220px;
       height: 260px;
       pointer-events: auto;
-      z-index: 999;
+      z-index: -999;
     }
 
     /* Character “stands” above the (scaled) trampoline */
@@ -248,6 +248,7 @@
   </script>
 </body>
 </html>
+
 
 
 
