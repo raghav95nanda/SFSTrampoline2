@@ -240,17 +240,24 @@
       isBouncing = false;
     }
 
-    trampolineHitbox.addEventListener('click', () => {
-      if (isBouncing) return;
+trampolineHitbox.addEventListener('click', () => {
+  if (isBouncing) return;
 
-      bounceCount += 1;
-      const isBig = (bounceCount % 3 === 0); // 1 & 2 small, 3rd big
-      doBounce(isBig).catch(console.error);
-    });
+  bounceCount += 1;
+  const isBig = (bounceCount % 3 === 0);
+  doBounce(isBig).catch(console.error);
+});
+
+characterWrapper.addEventListener('click', () => {
+  if (isBouncing) return;
+
+  bounceCount += 1;
+  const isBig = (bounceCount % 3 === 0);
+  doBounce(isBig).catch(console.error);
+});
   </script>
 </body>
 </html>
-
 
 
 
