@@ -322,25 +322,37 @@
       }
 
       function checkCollisions() {
-        const gh = gameEl.clientHeight;
-        const playerRect = getPlayerRect();
+  const gh = gameEl.clientHeight;
+  const playerRect = getPlayerRect();
 
-        for (const s of spikes) {
-          if (rectsOverlap(playerRect, s)) {
-            endGame(false);
-            return;
-          }
-        }
+  // Hit spikes?
+  for (const s of spikes) {
+    if (rectsOverlap(playerRect, s)) {
+      endGame(false);
+      return;
+    }
+  }
 
-        if (playerRect.y <= 0 || playerRect.y + playerRect.h >= gh) {
-          endGame(false);
-          return;
-        }
+  // FLOOR: hitting the bottom is game over
+  if (playerRect.y + playerRect.h >= gh) {
+    endGame(false);
+    return;
+  }
 
-        if (goal && rectsOverlap(playerRect, goal)) {
-          endGame(true);
-        }
-      }
+  // ROOF: just clamp to top, don't end the game
+  if (playerRect.y <= 0) {
+    // keep the character inside the screen
+    playerY = PLAYER_SIZE / 2;
+    velY = 0;               // stop upward velocity so it "slides" along the roof
+    updatePlayerEl();
+  }
+
+  // Reached goal?
+  if (goal && rectsOverlap(playerRect, goal)) {
+    endGame(true);
+  }
+}
+
 
       // ----- GAME LOOP ---------------------------------------------------
 
@@ -422,3 +434,4 @@
   </script>
 </body>
 </html>
+
