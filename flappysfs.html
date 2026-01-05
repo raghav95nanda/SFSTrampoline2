@@ -6,10 +6,13 @@
   <style>
     :root {
       --game-max-width: 900px;
+
+      /* 🔧 Character size (single knob for CSS + JS) */
+      --player-size: 40px;
     }
 
     body {
-      background: #f5f5f5;
+      background: #ffffff; /* white page */
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       margin: 0;
       padding: 40px 0;
@@ -20,12 +23,12 @@
     #game-container {
       position: relative;
       width: min(100%, var(--game-max-width));
-      /* keep same aspect ratio as stage.svg (2906 x 632) */
+      /* same aspect ratio as stage.svg (2906 x 632) */
       aspect-ratio: 2906 / 632;
-      background: #222;
+      background: transparent;              /* transparent box */
       overflow: hidden;
       border-radius: 16px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
       cursor: pointer;
     }
 
@@ -41,11 +44,10 @@
     /* Character */
     #player {
       position: absolute;
-      width: 40px;
-      height: 40px;
+      width: var(--player-size);
+      height: var(--player-size);
       transform: translate(-50%, -50%);
-      /* start somewhere left-ish & middle; JS will update */
-      left: 8%;
+      left: 18%;
       top: 50%;
       pointer-events: none;
     }
@@ -55,7 +57,7 @@
       height: 100%;
     }
 
-    /* Start button */
+    /* Start overlay */
     #start-overlay {
       position: absolute;
       inset: 0;
@@ -125,7 +127,7 @@
       pointer-events: none;
     }
 
-    /* Set this to true in JS to see the hitboxes */
+    /* Set SHOW_DEBUG_HITBOXES = true in JS to see these */
     .hitbox.debug-spike {
       background: rgba(255, 0, 0, 0.25);
       outline: 1px solid rgba(255, 0, 0, 0.7);
@@ -164,28 +166,29 @@
   <script>
     // ----- CONFIG --------------------------------------------------------
 
-    // Spike hitboxes (in percentages of game width / height)
-    // Adjust these values to line up with spikes in stage.svg
+    // Bottom spike cluster from the SVG (3 spikes grouped) – MUCH easier:
+    // These are % of game width/height, derived from stage.svg coordinates.
     const SPIKE_DEFS = [
-      { x: 0.30, y: 0.68, width: 0.03, height: 0.25 },
-      { x: 0.48, y: 0.68, width: 0.03, height: 0.25 },
-      { x: 0.66, y: 0.68, width: 0.03, height: 0.25 },
-      { x: 0.80, y: 0.68, width: 0.03, height: 0.25 }
+      { x: 0.188, y: 0.74, width: 0.024, height: 0.28 },
+      { x: 0.218, y: 0.74, width: 0.024, height: 0.28 },
+      { x: 0.248, y: 0.74, width: 0.024, height: 0.28 }
     ];
 
-    // Finish/checkered area
-    const GOAL_DEF = { x: 0.92, y: 0.35, width: 0.03, height: 0.6 };
+    // Finish/checkered strip on the far right of the SVG
+    const GOAL_DEF = { x: 0.955, y: 0.10, width: 0.045, height: 0.80 };
 
-    const SHOW_DEBUG_HITBOXES = true; // set true to see spike / goal boxes
+    // See hitboxes for debugging
+    const SHOW_DEBUG_HITBOXES = false; // set true to re-check alignment
 
-    // Physics
-    const HORIZONTAL_SPEED = 120;     // pixels per second (auto-run to the right)
-    const GRAVITY = 200;             // pixels/s^2 (positive = down)
-    const FLAP_VELOCITY = -360;      // pixels/s (upwards impulse)
-    const MAX_FALL_SPEED = 600;      // clamp downward speed
+    // Physics (easier settings)
+    const HORIZONTAL_SPEED = 90;   // slower auto-run
+    const GRAVITY = 600;           // softer gravity
+    const FLAP_VELOCITY = -260;    // gentle upward impulse
+    const MAX_FALL_SPEED = 480;    // clamp downward speed
 
-    const PLAYER_WIDTH = 80;
-    const PLAYER_HEIGHT = 80;
+    // Read character size from CSS variable so you only change it once
+    const rootStyles = getComputedStyle(document.documentElement);
+    const PLAYER_SIZE = parseFloat(rootStyles.getPropertyValue('--player-size')) || 40;
 
     // ----- DOM ELEMENTS --------------------------------------------------
 
@@ -197,255 +200,4 @@
     const resultMessage = document.getElementById('result-message');
     const replayButton = document.getElementById('replay-button');
 
-    // Lottie animation (jump)
-    const jumpAnim = lottie.loadAnimation({
-      container: document.getElementById('player-lottie'),
-      renderer: 'svg',
-      loop: false,
-      autoplay: false,
-      path: 'jump.json'
-    });
-
-    // We'll use these values later
-    let jumpLastFrame = null;
-    jumpAnim.addEventListener('DOMLoaded', () => {
-      jumpLastFrame = jumpAnim.totalFrames - 1;
-      // start sitting on first frame
-      jumpAnim.goToAndStop(0, true);
-    });
-
-    // ----- GAME STATE ----------------------------------------------------
-
-    let state = 'ready'; // 'ready' | 'running' | 'dead' | 'won'
-
-    let playerX = 0;
-    let playerY = 0;
-    let velY = 0;
-
-    let spikes = []; // each: {def, el, x, y, w, h}
-    let goal = null; // {def, el, x, y, w, h}
-
-    let lastTimestamp = null;
-    let rafId = null;
-
-    // ----- INIT HITBOX ELEMENTS -----------------------------------------
-
-    function createHitboxes() {
-      // Clear old ones
-      spikes.forEach(s => s.el.remove());
-      spikes = [];
-      if (goal && goal.el) goal.el.remove();
-      goal = null;
-
-      const gw = gameEl.clientWidth;
-      const gh = gameEl.clientHeight;
-
-      // Spikes
-      SPIKE_DEFS.forEach(def => {
-        const el = document.createElement('div');
-        el.className = 'hitbox' + (SHOW_DEBUG_HITBOXES ? ' debug-spike' : '');
-        gameEl.appendChild(el);
-
-        const x = def.x * gw;
-        const y = def.y * gh;
-        const w = def.width * gw;
-        const h = def.height * gh;
-
-        el.style.left = x + 'px';
-        el.style.top = y + 'px';
-        el.style.width = w + 'px';
-        el.style.height = h + 'px';
-
-        spikes.push({ def, el, x, y, w, h });
-      });
-
-      // Goal
-      const gEl = document.createElement('div');
-      gEl.className = 'hitbox' + (SHOW_DEBUG_HITBOXES ? ' debug-goal' : '');
-      gameEl.appendChild(gEl);
-
-      const gx = GOAL_DEF.x * gw;
-      const gy = GOAL_DEF.y * gh;
-      const gwid = GOAL_DEF.width * gw;
-      const ghgt = GOAL_DEF.height * gh;
-
-      gEl.style.left = gx + 'px';
-      gEl.style.top = gy + 'px';
-      gEl.style.width = gwid + 'px';
-      gEl.style.height = ghgt + 'px';
-
-      goal = { def: GOAL_DEF, el: gEl, x: gx, y: gy, w: gwid, h: ghgt };
-    }
-
-    window.addEventListener('resize', () => {
-      createHitboxes();
-      resetPlayerPosition();
-    });
-
-    // ----- PLAYER & ANIMATION -------------------------------------------
-
-    function resetPlayerPosition() {
-      const gw = gameEl.clientWidth;
-      const gh = gameEl.clientHeight;
-      playerX = gw * 0.18;
-      playerY = gh * 0.5;
-      velY = 0;
-      updatePlayerEl();
-    }
-
-    function updatePlayerEl() {
-      playerEl.style.left = playerX + 'px';
-      playerEl.style.top = playerY + 'px';
-    }
-
-    function flap() {
-      if (state !== 'running') return;
-
-      // Upward velocity
-      velY = FLAP_VELOCITY;
-
-      // Animation: go to last frame, then play backwards slowly
-      if (jumpLastFrame !== null) {
-        jumpAnim.setDirection(-1);
-        jumpAnim.setSpeed(0.6); // slow-ish
-        jumpAnim.goToAndStop(jumpLastFrame, true);
-        jumpAnim.play();
-      }
-    }
-
-    // ----- COLLISIONS ----------------------------------------------------
-
-    function rectsOverlap(a, b) {
-      return !(
-        a.x + a.w < b.x ||
-        a.x > b.x + b.w ||
-        a.y + a.h < b.y ||
-        a.y > b.y + b.h
-      );
-    }
-
-    function getPlayerRect() {
-      return {
-        x: playerX - PLAYER_WIDTH / 2,
-        y: playerY - PLAYER_HEIGHT / 2,
-        w: PLAYER_WIDTH,
-        h: PLAYER_HEIGHT
-      };
-    }
-
-    function checkCollisions() {
-      const gw = gameEl.clientWidth;
-      const gh = gameEl.clientHeight;
-      const playerRect = getPlayerRect();
-
-      // Hit spikes?
-      for (const s of spikes) {
-        if (rectsOverlap(playerRect, s)) {
-          endGame(false);
-          return;
-        }
-      }
-
-      // Off top or bottom?
-      if (playerRect.y <= 0 || playerRect.y + playerRect.h >= gh) {
-        endGame(false);
-        return;
-      }
-
-      // Reached goal?
-      if (rectsOverlap(playerRect, goal)) {
-        endGame(true);
-      }
-    }
-
-    // ----- GAME LOOP -----------------------------------------------------
-
-    function gameLoop(timestamp) {
-      if (lastTimestamp == null) lastTimestamp = timestamp;
-      const dt = (timestamp - lastTimestamp) / 1000; // seconds
-      lastTimestamp = timestamp;
-
-      if (state === 'running') {
-        const gw = gameEl.clientWidth;
-        const gh = gameEl.clientHeight;
-
-        // Horizontal auto-run
-        playerX += HORIZONTAL_SPEED * dt;
-
-        // Gravity
-        velY += GRAVITY * dt;
-        if (velY > MAX_FALL_SPEED) velY = MAX_FALL_SPEED;
-
-        playerY += velY * dt;
-
-        // Clamp horizontal inside game area
-        const minX = PLAYER_WIDTH / 2;
-        const maxX = gw - PLAYER_WIDTH / 2;
-        if (playerX > maxX) playerX = maxX;
-
-        updatePlayerEl();
-        checkCollisions();
-      }
-
-      rafId = requestAnimationFrame(gameLoop);
-    }
-
-    // ----- START / END / REPLAY -----------------------------------------
-
-    function startGame() {
-      state = 'running';
-      resultOverlay.style.display = 'none';
-      startOverlay.style.display = 'none';
-      resetPlayerPosition();
-      lastTimestamp = null;
-    }
-
-    function endGame(won) {
-      if (state !== 'running') return;
-      state = won ? 'won' : 'dead';
-
-      resultMessage.textContent = won ? 'You Win! 🎉' : 'Game Over!';
-      resultOverlay.style.display = 'flex';
-    }
-
-    function resetGameAndShowStart() {
-      state = 'ready';
-      resetPlayerPosition();
-      resultOverlay.style.display = 'none';
-      startOverlay.style.display = 'flex';
-      if (jumpLastFrame !== null) {
-        jumpAnim.goToAndStop(0, true);
-      }
-    }
-
-    // ----- EVENT LISTENERS ----------------------------------------------
-
-    startButton.addEventListener('click', (e) => {
-      e.stopPropagation();
-      startGame();
-    });
-
-    replayButton.addEventListener('click', (e) => {
-      e.stopPropagation();
-      resetGameAndShowStart();
-    });
-
-    // Clicking anywhere in the game container while running triggers flap
-    gameEl.addEventListener('click', () => {
-      if (state === 'running') {
-        flap();
-      }
-    });
-
-    // ----- INITIALIZE ----------------------------------------------------
-
-    createHitboxes();
-    resetPlayerPosition();
-    rafId = requestAnimationFrame(gameLoop);
-  </script>
-</body>
-</html>
-
-
-
-
+    // Lottie
