@@ -1,220 +1,149 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Trampoline Easter Egg</title>
-  <style>
-    body {
-      background: #f5f5f5;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
 
-    /* Tiny-ish widget on the page */
-    .trampoline-widget {
-      position: relative;
-      width: 220px;
-      height: 260px;
-      margin: 40px auto;
-      pointer-events: auto;
-    }
+<script>
+  // --- Lottie setup ---
+  const idleAnim = lottie.loadAnimation({
+    container: document.getElementById('character-idle'),
+    renderer: 'svg',
+    loop: true,
+    autoplay: true,
+    path: 'idle.json'
+  });
 
-    .character-wrapper {
-      position: absolute;
-      left: 50%;
-      bottom: 110px; /* sits above trampoline */
-      transform: translate(-50%, 0);
-      width: 150px;
-      height: 150px;
-      will-change: transform;
-    }
+  const jumpAnim = lottie.loadAnimation({
+    container: document.getElementById('character-jump'),
+    renderer: 'svg',
+    loop: false,
+    autoplay: false,
+    path: 'jump.json'
+  });
 
-    .character-lottie {
-      position: absolute;
-      inset: 0;
-    }
+  const trampolineAnim = lottie.loadAnimation({
+    container: document.getElementById('trampoline-lottie'),
+    renderer: 'svg',
+    loop: false,
+    autoplay: false,
+    path: 'trampoline2.json'
+  });
 
-    .character-lottie#character-jump {
-      opacity: 0;
-      pointer-events: none;
-    }
+  const characterWrapper = document.getElementById('character-wrapper');
+  const idleContainer = document.getElementById('character-idle');
+  const jumpContainer = document.getElementById('character-jump');
+  const trampolineHitbox = document.getElementById('trampoline-hitbox');
 
-    .trampoline-wrapper {
-      position: absolute;
-      left: 50%;
-      bottom: 0;
-      transform: translateX(-50%);
-      width: 200px;
-      height: 120px;
-      cursor: pointer;
-    }
+  let isBouncing = false;
+  let bounceCount = 0;
 
-    /* Make sure SVG scales inside */
-    .trampoline-wrapper > div,
-    .character-lottie > div {
-      width: 100%;
-      height: 100%;
-    }
+  // Timings (ms)
+  const downDuration = 340;      // 0.34 s – squish down
+  const totalUpTime = 1330;      // must finish ascent within 1.33 s
+  const upDuration = totalUpTime - downDuration;
 
-    .hint {
-      text-align: center;
-      font-size: 12px;
-      color: #666;
-      margin-top: 8px;
-    }
-  </style>
-</head>
-<body>
+  // Heights (px; negative = up)
+  const smallPeak = -80;
+  const bigPeak = -180;
+  const clickDownOffset = 12;
 
-  <div class="trampoline-widget">
-    <!-- Character container (we move this up/down) -->
-    <div id="character-wrapper" class="character-wrapper">
-      <div id="character-idle" class="character-lottie"></div>
-      <div id="character-jump" class="character-lottie"></div>
-    </div>
+  // Fall durations (ms)
+  const smallFallDuration = 700;
+  const bigFallDuration   = 1800;
 
-    <!-- Trampoline (click target) -->
-    <div id="trampoline-hitbox" class="trampoline-wrapper">
-      <div id="trampoline-lottie"></div>
-    </div>
-  </div>
+  function resetCharacterTransform() {
+    characterWrapper.style.transform = ''; // back to CSS transform (translate + scale)
+  }
 
-  <div class="hint">Click the trampoline 🪂</div>
+  function showIdle() {
+    idleContainer.style.opacity = 1;
+    jumpContainer.style.opacity = 0;
+  }
 
-  <!-- Lottie-web -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+  function showJump() {
+    idleContainer.style.opacity = 0;
+    jumpContainer.style.opacity = 1;
+  }
 
-  <script>
-    // --- Lottie setup ---
-    const idleAnim = lottie.loadAnimation({
-      container: document.getElementById('character-idle'),
-      renderer: 'svg',
-      loop: true,
-      autoplay: true,
-      path: 'idle.json'
+  // Play jump once and then freeze on last frame
+  function playJumpOnceAndHold() {
+    return new Promise(resolve => {
+      const onComplete = () => {
+        jumpAnim.removeEventListener('complete', onComplete);
+        const lastFrame = jumpAnim.totalFrames - 1;
+        jumpAnim.goToAndStop(lastFrame, true); // hold falling pose
+        resolve();
+      };
+
+      jumpAnim.removeEventListener('complete', onComplete); // safety
+      jumpAnim.addEventListener('complete', onComplete);
+      jumpAnim.goToAndPlay(0, true);
+    });
+  }
+
+  // Helper: animate wrapper, keeping the scale from CSS
+  function animateWrapper(keyframes, options) {
+    const anim = characterWrapper.animate(keyframes, Object.assign({
+      fill: 'forwards'
+    }, options));
+    return anim.finished;
+  }
+
+  async function doBounce(isBigBounce) {
+    isBouncing = true;
+
+    // Start trampoline bounce
+    trampolineAnim.stop();
+    trampolineAnim.goToAndPlay(0, true);
+
+    // 1) Squash down
+    await animateWrapper([
+      { transform: 'translate(-50%, 0px) scale(var(--char-scale))' },
+      { transform: `translate(-50%, ${clickDownOffset}px) scale(var(--char-scale))` }
+    ], {
+      duration: downDuration,
+      easing: 'ease-in'
     });
 
-    const jumpAnim = lottie.loadAnimation({
-      container: document.getElementById('character-jump'),
-      renderer: 'svg',
-      loop: false,
-      autoplay: false,
-      path: 'jump.json'
+    const peak = isBigBounce ? bigPeak : smallPeak;
+
+    // 👉 Ascent starts: switch to jump FIRST FRAME (static pose)
+    showJump();
+    jumpAnim.stop();
+    jumpAnim.goToAndStop(0, true);
+
+    // 2) Go up to peak
+    await animateWrapper([
+      { transform: `translate(-50%, ${clickDownOffset}px) scale(var(--char-scale))` },
+      { transform: `translate(-50%, ${peak}px) scale(var(--char-scale))` }
+    ], {
+      duration: upDuration,
+      easing: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)'
     });
 
-    const trampolineAnim = lottie.loadAnimation({
-      container: document.getElementById('trampoline-lottie'),
-      renderer: 'svg',
-      loop: false,
-      autoplay: false,
-      path: 'trampoline2.json'
+    // 👉 At the peak: play jump morph and then hold last frame
+    playJumpOnceAndHold().catch(console.error);
+
+    // 3) Float / fall down while jump animation finishes & then freezes
+    const fallDuration = isBigBounce ? bigFallDuration : smallFallDuration;
+    await animateWrapper([
+      { transform: `translate(-50%, ${peak}px) scale(var(--char-scale))` },
+      { transform: 'translate(-50%, 0px) scale(var(--char-scale))' }
+    ], {
+      duration: fallDuration,
+      easing: isBigBounce
+        ? 'cubic-bezier(0.17, 0.67, 0.35, 0.99)'
+        : 'ease-in'
     });
 
-    const characterWrapper = document.getElementById('character-wrapper');
-    const idleContainer = document.getElementById('character-idle');
-    const jumpContainer = document.getElementById('character-jump');
-    const trampolineHitbox = document.getElementById('trampoline-hitbox');
+    // Landing: back to idle
+    showIdle();
+    resetCharacterTransform();
+    isBouncing = false;
+  }
 
-    let isBouncing = false;
-    let bounceCount = 0;
+  trampolineHitbox.addEventListener('click', () => {
+    if (isBouncing) return;
 
-    // Tunable values
-    const downDuration = 340;               // ms – squash down before going up (0.34 s)
-    const totalUpTime = 1330;               // ms – must finish ascent within this time
-    const upDuration = totalUpTime - downDuration;
-
-    const smallPeak = -80;                  // px translateY for small bounce
-    const bigPeak = -180;                   // px translateY for big bounce
-    const clickDownOffset = 12;             // px character moves down on click
-
-    const smallFallDuration = 700;          // ms – normal fall
-    const bigFallDuration = 1800;           // ms – slow float for big bounce
-
-    function resetCharacterTransform() {
-      characterWrapper.style.transform = 'translate(-50%, 0)';
-    }
-
-    function showIdle() {
-      idleContainer.style.opacity = 1;
-      jumpContainer.style.opacity = 0;
-    }
-
-    function showJump() {
-      idleContainer.style.opacity = 0;
-      jumpContainer.style.opacity = 1;
-    }
-
-    // Utility: animate and return a promise that resolves when finished
-    function animateWrapper(keyframes, options) {
-      const anim = characterWrapper.animate(keyframes, Object.assign({
-        fill: 'forwards'
-      }, options));
-      return anim.finished;
-    }
-
-    async function doBounce(isBigBounce) {
-      isBouncing = true;
-
-      // Start trampoline bounce from frame 0
-      trampolineAnim.stop();
-      trampolineAnim.goToAndPlay(0, true);
-
-      // 1) Move character down slightly (squash)
-      await animateWrapper([
-        { transform: 'translate(-50%, 0px)' },
-        { transform: `translate(-50%, ${clickDownOffset}px)` }
-      ], {
-        duration: downDuration,
-        easing: 'ease-in'
-      });
-
-      const peak = isBigBounce ? bigPeak : smallPeak;
-
-      // 2) Go up to peak – still in idle pose
-      const upAnimPromise = animateWrapper([
-        { transform: `translate(-50%, ${clickDownOffset}px)` },
-        { transform: `translate(-50%, ${peak}px)` }
-      ], {
-        duration: upDuration,
-        easing: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)'
-      });
-
-      // Switch to "jump" animation at/near the peak
-      // Slight delay so the pose change feels like it happens at the top
-      setTimeout(() => {
-        showJump();
-        jumpAnim.stop();
-        jumpAnim.goToAndPlay(0, true); // plays once while character starts falling
-      }, upDuration - 120); // tweak this offset if the timing feels off
-
-      await upAnimPromise;
-
-      // 3) Float / fall down back to trampoline
-      const fallDuration = isBigBounce ? bigFallDuration : smallFallDuration;
-      await animateWrapper([
-        { transform: `translate(-50%, ${peak}px)` },
-        { transform: 'translate(-50%, 0px)' }
-      ], {
-        duration: fallDuration,
-        easing: isBigBounce
-          ? 'cubic-bezier(0.17, 0.67, 0.35, 0.99)' // softer / floaty
-          : 'ease-in'
-      });
-
-      // Landing: reset to idle state
-      jumpAnim.stop();
-      showIdle();
-      resetCharacterTransform();
-      isBouncing = false;
-    }
-
-    trampolineHitbox.addEventListener('click', () => {
-      if (isBouncing) return;
-
-      bounceCount += 1;
-      const isBig = (bounceCount % 3 === 0); // 1 & 2 small, 3rd big, repeat
-
-      doBounce(isBig).catch(console.error);
-    });
-  </script>
-</body>
-</html>
+    bounceCount += 1;
+    const isBig = (bounceCount % 3 === 0);
+    doBounce(isBig).catch(console.error);
+  });
+</script>
