@@ -4,33 +4,20 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
   <title>Balloon Flappy Game</title>
+
   <style>
     :root {
-  --game-max-width: 900px;
+      --game-max-width: 900px;
 
-  /* Character size knobs */
-  --player-size-desktop: 40px;
-  --player-size-mobile: 26px;
-  --player-size: var(--player-size-desktop);
-
-  /* 🔧 Stage height knobs (in px) */
-  --stage-height-desktop: 260px;
-  --stage-height-mobile: 320px; /* taller on mobile */
-  --stage-height: var(--stage-height-desktop);
-}
-
-@media (max-width: 768px) {
-  :root {
-    --player-size: var(--player-size-mobile);
-    --stage-height: var(--stage-height-mobile);
-  }
-}
-
+      /* Character size knobs */
+      --player-size-desktop: 40px;
+      --player-size-mobile: 26px;
+      --player-size: var(--player-size-desktop);
+    }
 
     @media (max-width: 768px) {
       :root {
         --player-size: var(--player-size-mobile);
-        --stage-aspect: var(--stage-aspect-mobile);
       }
     }
 
@@ -43,31 +30,17 @@
       justify-content: center;
     }
 
-#game-container {
-  position: relative;
-  width: min(100%, var(--game-max-width));
-  height: var(--stage-height);        /* 🔧 height is now variable-driven */
-  background: transparent;
-  overflow: hidden;
-  border-radius: 16px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
-  cursor: pointer;
-
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  user-select: none;
-  -webkit-tap-highlight-color: transparent;
-}
-
-
-    #game-container * {
+    #game-container {
+      position: relative;
+      width: min(100%, var(--game-max-width));
+      aspect-ratio: 2906 / 632; /* 🔒 keep SVG aspect */
+      overflow: hidden;
+      border-radius: 16px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+      cursor: pointer;
       -webkit-user-select: none;
-      -moz-user-select: none;
       user-select: none;
-    }
-
-    #game-container:focus {
-      outline: none;
+      -webkit-tap-highlight-color: transparent;
     }
 
     #stage-bg {
@@ -75,465 +48,328 @@
       inset: 0;
       width: 100%;
       height: 100%;
-      object-fit: fill;
+      object-fit: cover;
       pointer-events: none;
     }
 
-    /* Character */
     #player {
       position: absolute;
       width: var(--player-size);
       height: var(--player-size);
       transform: translate(-50%, -50%);
-      left: 18%;
-      top: 50%;
       pointer-events: none;
     }
 
-    #player-lottie > div {
-      width: 100%;
-      height: 100%;
-    }
+    #player-lottie > div { width:100%; height:100%; }
 
-    /* Start overlay */
-    #start-overlay {
+    #start-overlay,
+    #result-overlay {
       position: absolute;
       inset: 0;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
-      flex-direction: column;
       background: rgba(0,0,0,0.35);
       z-index: 5;
     }
+
+    #result-overlay { display:none; }
 
     #start-button {
       background: transparent;
       border: none;
       padding: 0;
       cursor: pointer;
-      outline: none;
     }
 
-    /* Responsive start button size */
-    #start-button img {
-      width: min(140px, 30vw);
-      height: auto;
-      display: block;
-    }
+    #start-button img { width:min(140px,30vw); }
 
-    #start-text {
-      margin-top: 12px;
-      color: #fff;
-      font-size: 14px;
-    }
-
-    /* Game over / win overlay */
-    #result-overlay {
-      position: absolute;
-      inset: 0;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      flex-direction: column;
-      background: rgba(0,0,0,0.45);
-      z-index: 6;
-      text-align: center;
-    }
+    #start-text { color:#fff; margin-top:10px; }
 
     #result-message {
-      color: #fff;
-      font-size: 28px;
-      margin-bottom: 12px;
-      text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+      color:#fff;
+      font-size:28px;
+      margin-bottom:10px;
     }
 
     #replay-button {
-      margin-top: 4px;
-      padding: 8px 18px;
-      border-radius: 999px;
-      border: none;
-      font-size: 14px;
-      cursor: pointer;
-      background: #f48120;
-      color: #fff;
-      font-weight: 600;
-      box-shadow: 0 3px 6px rgba(0,0,0,0.3);
-      outline: none;
+      border:none;
+      padding:8px 18px;
+      border-radius:999px;
+      background:#f48120;
+      color:#fff;
+      font-weight:600;
+      cursor:pointer;
     }
 
-    .hitbox {
-      position: absolute;
-      pointer-events: none;
-    }
-
-    .hitbox.debug-spike {
-      background: rgba(255, 0, 0, 0.25);
-      outline: 1px solid rgba(255, 0, 0, 0.7);
-    }
-
-    .hitbox.debug-goal {
-      background: rgba(0, 255, 0, 0.2);
-      outline: 1px solid rgba(0, 255, 0, 0.7);
-    }
+    .hitbox{position:absolute;pointer-events:none;}
+    .debug-spike{background:rgba(255,0,0,.25);outline:1px solid red;}
+    .debug-goal{background:rgba(0,255,0,.25);outline:1px solid green;}
   </style>
 </head>
+
 <body>
   <div id="game-container">
-    <img id="stage-bg" src="stage.svg" alt="Stage" />
+    <img id="stage-bg" src="stage.svg"/>
 
     <div id="player">
       <div id="player-lottie"></div>
     </div>
 
-    <!-- Start overlay -->
     <div id="start-overlay">
-      <button id="start-button" type="button">
-        <img src="Start.svg" alt="Start" />
-      </button>
+      <button id="start-button"><img src="Start.svg"></button>
       <div id="start-text">Tap START to play. Tap the stage to jump.</div>
     </div>
 
-    <!-- Result overlay -->
     <div id="result-overlay">
       <div id="result-message"></div>
-      <button id="replay-button" type="button">Replay</button>
+      <button id="replay-button">Replay</button>
     </div>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
   <script>
     window.addEventListener('load', () => {
-      // ----- CONFIG ------------------------------------------------------
 
-      // Spike clusters from stage.svg
+      /* ---------------- CONFIG ---------------- */
+
+      // Spike rects (relative to SVG)
       const SPIKE_DEFS = [
-        { x: 0.1170, y: -0.1995, width: 0.0211, height: 0.5860 },
-        { x: 0.1413, y: -0.1995, width: 0.0211, height: 0.5860 },
-        { x: 0.1639, y: -0.1995, width: 0.0211, height: 0.5860 },
+        { x:0.1170,y:-0.1995,width:0.0211,height:0.5860 },
+        { x:0.1413,y:-0.1995,width:0.0211,height:0.5860 },
+        { x:0.1639,y:-0.1995,width:0.0211,height:0.5860 },
 
-        { x: 0.1834, y: 0.7545, width: 0.0211, height: 0.2518 },
-        { x: 0.2077, y: 0.7545, width: 0.0211, height: 0.2518 },
-        { x: 0.2303, y: 0.7545, width: 0.0211, height: 0.2518 },
+        { x:0.1834,y:0.7545,width:0.0211,height:0.2518 },
+        { x:0.2077,y:0.7545,width:0.0211,height:0.2518 },
+        { x:0.2303,y:0.7545,width:0.0211,height:0.2518 },
 
-        { x: 0.4001, y: -0.0082, width: 0.0211, height: 0.2518 },
-        { x: 0.4243, y: -0.0082, width: 0.0211, height: 0.2518 },
-        { x: 0.4470, y: -0.0082, width: 0.0211, height: 0.2518 },
+        { x:0.4001,y:-0.0082,width:0.0211,height:0.2518 },
+        { x:0.4243,y:-0.0082,width:0.0211,height:0.2518 },
+        { x:0.4470,y:-0.0082,width:0.0211,height:0.2518 },
 
-        { x: 0.5461, y: 0.5801, width: 0.0211, height: 0.5860 },
-        { x: 0.5704, y: 0.5801, width: 0.0211, height: 0.5860 },
-        { x: 0.5930, y: 0.5801, width: 0.0211, height: 0.5860 },
+        { x:0.5461,y:0.5801,width:0.0211,height:0.5860 },
+        { x:0.5704,y:0.5801,width:0.0211,height:0.5860 },
+        { x:0.5930,y:0.5801,width:0.0211,height:0.5860 },
 
-        { x: 0.7401, y: 0.4203, width: 0.0211, height: 0.5860 },
-        { x: 0.8497, y: -0.0639, width: 0.0211, height: 0.5860 }
+        { x:0.7401,y:0.4203,width:0.0211,height:0.5860 },
+        { x:0.8497,y:-0.0639,width:0.0211,height:0.5860 }
       ];
 
-      const GOAL_DEF = { x: 0.955, y: 0.10, width: 0.045, height: 0.80 };
+      const GOAL_DEF = { x:0.955,y:0.10,width:0.045,height:0.80 };
 
-      const SHOW_DEBUG_HITBOXES = false;
+      const SHOW_DEBUG = false;
 
-      // Soften spike hitboxes slightly
+      /* --- YOUR UPDATED HITBOX TUNING --- */
+      const SHRINK_X = 0.002;
+      const SHRINK_Y = 0.005;
+
       const HITBOX_SHRINK_X = 0.006;
       const HITBOX_SHRINK_Y = 0.04;
 
-      // Physics
+      /* --- YOUR UPDATED PHYSICS --- */
       const HORIZONTAL_SPEED = 80;
       const GRAVITY = 350;
       const FLAP_VELOCITY = -120;
       const MAX_FALL_SPEED = 480;
 
-      // PLAYER_SIZE will be read from CSS so mobile vs desktop works
-      let PLAYER_SIZE = 40;
-
-      function updatePlayerSizeFromCSS() {
-        const rootStyles = getComputedStyle(document.documentElement);
-        const cssSize = parseFloat(rootStyles.getPropertyValue('--player-size'));
-        PLAYER_SIZE = isNaN(cssSize) ? 40 : cssSize;
-      }
-
-      updatePlayerSizeFromCSS();
-
-      // ----- DOM ---------------------------------------------------------
+      /* ---------------------------------- */
 
       const gameEl = document.getElementById('game-container');
       const playerEl = document.getElementById('player');
       const startOverlay = document.getElementById('start-overlay');
-      const startButton = document.getElementById('start-button');
       const resultOverlay = document.getElementById('result-overlay');
       const resultMessage = document.getElementById('result-message');
+      const startButton = document.getElementById('start-button');
       const replayButton = document.getElementById('replay-button');
 
-      // Prevent blue selection flash on desktop
-      gameEl.addEventListener('mousedown', e => e.preventDefault());
+      let PLAYER_SIZE = 40;
+      function updatePlayerSize(){
+        PLAYER_SIZE=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--player-size'))||40;
+      }
+      updatePlayerSize();
 
-      // Lottie (jump only)
       const jumpAnim = lottie.loadAnimation({
         container: document.getElementById('player-lottie'),
-        renderer: 'svg',
-        loop: false,
-        autoplay: false,
-        path: 'jump.json'
+        renderer:'svg',loop:false,autoplay:false,path:'jump.json'
       });
 
-      let jumpLastFrame = null;
-      jumpAnim.addEventListener('DOMLoaded', () => {
-        jumpLastFrame = jumpAnim.totalFrames - 1;
-        jumpAnim.goToAndStop(0, true);
+      let jumpLastFrame=null;
+      jumpAnim.addEventListener('DOMLoaded',()=>{
+        jumpLastFrame=jumpAnim.totalFrames-1;
+        jumpAnim.goToAndStop(0,true);
       });
 
-      // ----- Tap helper (mobile + desktop) -------------------------------
-
-      function addTapListener(element, handler) {
-        let touched = false;
-
-        element.addEventListener('touchstart', function (e) {
-          touched = true;
-          e.preventDefault();
-          handler(e);
-        }, { passive: false });
-
-        element.addEventListener('click', function (e) {
-          if (touched) {
-            touched = false;
-            return;
-          }
-          handler(e);
-        });
+      function addTap(el,fn){
+        let t=false;
+        el.addEventListener('touchstart',e=>{t=true;e.preventDefault();fn(e)}, {passive:false});
+        el.addEventListener('click',e=>{if(t){t=false;return}fn(e)});
       }
 
-      // ----- STATE -------------------------------------------------------
+      let state='ready';
+      let playerX=0,playerY=0,velY=0;
+      let spikes=[],goal=null;
+      let invincibleUntil=0;
+      let lastT=null;
 
-      let state = 'ready'; // 'ready' | 'running' | 'dead' | 'won'
+      function createHitboxes(){
+        spikes.forEach(s=>s.el.remove());
+        spikes=[];
 
-      let playerX = 0;
-      let playerY = 0;
-      let velY = 0;
+        if(goal?.el)goal.el.remove();
+        goal=null;
 
-      let spikes = [];
-      let goal = null;
+        const gw=gameEl.clientWidth, gh=gameEl.clientHeight;
 
-      let lastTimestamp = null;
-      let rafId = null;
-
-      let invincibleUntil = 0; // ms timestamp
-
-      // ----- HITBOXES ----------------------------------------------------
-
-      function createHitboxes() {
-        spikes.forEach(s => s.el.remove());
-        spikes = [];
-        if (goal && goal.el) goal.el.remove();
-        goal = null;
-
-        const gw = gameEl.clientWidth;
-        const gh = gameEl.clientHeight;
-
-        SPIKE_DEFS.forEach(def => {
-          const el = document.createElement('div');
-          el.className = 'hitbox' + (SHOW_DEBUG_HITBOXES ? ' debug-spike' : '');
+        SPIKE_DEFS.forEach(d=>{
+          const el=document.createElement('div');
+          el.className='hitbox'+(SHOW_DEBUG?' debug-spike':'');
           gameEl.appendChild(el);
 
-          const rawX = def.x * gw;
-          const rawY = def.y * gh;
-          const rawW = def.width  * gw;
-          const rawH = def.height * gh;
+          const rawX=d.x*gw, rawY=d.y*gh, rawW=d.width*gw, rawH=d.height*gh;
 
-          const x = rawX + HITBOX_SHRINK_X * gw;
-          const y = rawY + HITBOX_SHRINK_Y * gh;
-          const w = Math.max(0, rawW - 2 * HITBOX_SHRINK_X * gw);
-          const h = Math.max(0, rawH - 2 * HITBOX_SHRINK_Y * gh);
+          const x=rawX+HITBOX_SHRINK_X*gw;
+          const y=rawY+HITBOX_SHRINK_Y*gh;
+          const w=Math.max(0,rawW-2*HITBOX_SHRINK_X*gw);
+          const h=Math.max(0,rawH-2*HITBOX_SHRINK_Y*gh);
 
-          el.style.left   = x + 'px';
-          el.style.top    = y + 'px';
-          el.style.width  = w + 'px';
-          el.style.height = h + 'px';
+          el.style.left=x+'px';
+          el.style.top=y+'px';
+          el.style.width=w+'px';
+          el.style.height=h+'px';
 
-          spikes.push({ x, y, w, h, el });
+          spikes.push({x,y,w,h,el});
         });
 
-        const gEl = document.createElement('div');
-        gEl.className = 'hitbox' + (SHOW_DEBUG_HITBOXES ? ' debug-goal' : '');
+        const gEl=document.createElement('div');
+        gEl.className='hitbox'+(SHOW_DEBUG?' debug-goal':'');
         gameEl.appendChild(gEl);
 
-        const gx   = GOAL_DEF.x * gw;
-        const gy   = GOAL_DEF.y * gh;
-        const gwid = GOAL_DEF.width  * gw;
-        const ghgt = GOAL_DEF.height * gh;
+        const gx=GOAL_DEF.x*gw, gy=GOAL_DEF.y*gh, gwid=GOAL_DEF.width*gw, ghgt=GOAL_DEF.height*gh;
 
-        gEl.style.left   = gx   + 'px';
-        gEl.style.top    = gy   + 'px';
-        gEl.style.width  = gwid + 'px';
-        gEl.style.height = ghgt + 'px';
+        gEl.style.left=gx+'px';
+        gEl.style.top=gy+'px';
+        gEl.style.width=gwid+'px';
+        gEl.style.height=ghgt+'px';
 
-        goal = { x: gx, y: gy, w: gwid, h: ghgt, el: gEl };
+        goal={x:gx,y:gy,w:gwid,h:ghgt,el:gEl};
       }
 
-      window.addEventListener('resize', () => {
-        updatePlayerSizeFromCSS();
-        createHitboxes();
-        resetPlayerPosition();
-      });
-
-      // ----- PLAYER & ANIMATION -----------------------------------------
-
-      function resetPlayerPosition() {
-        const gw = gameEl.clientWidth;
-        const gh = gameEl.clientHeight;
-        playerX = gw * 0.10;  // a bit further left
-        playerY = gh * 0.5;
-        velY = 0;
-        updatePlayerEl();
+      function resetPlayer(){
+        const gw=gameEl.clientWidth, gh=gameEl.clientHeight;
+        playerX=gw*0.10;
+        playerY=gh*0.5;
+        velY=0;
+        playerEl.style.left=playerX+'px';
+        playerEl.style.top=playerY+'px';
       }
 
-      function updatePlayerEl() {
-        playerEl.style.left = playerX + 'px';
-        playerEl.style.top = playerY + 'px';
-      }
-
-      function flap() {
-        if (state !== 'running') return;
-
-        velY = FLAP_VELOCITY;
-
-        if (jumpLastFrame !== null) {
+      function flap(){
+        if(state!=='running')return;
+        velY=FLAP_VELOCITY;
+        if(jumpLastFrame!=null){
           jumpAnim.setDirection(-1);
           jumpAnim.setSpeed(0.6);
-          jumpAnim.goToAndStop(jumpLastFrame, true);
+          jumpAnim.goToAndStop(jumpLastFrame,true);
           jumpAnim.play();
         }
       }
 
-      // ----- COLLISIONS --------------------------------------------------
-
-      function rectsOverlap(a, b) {
-        return !(
-          a.x + a.w < b.x ||
-          a.x > b.x + b.w ||
-          a.y + a.h < b.y ||
-          a.y > b.y + b.h
-        );
-      }
-
-      function getPlayerRect() {
-        return {
-          x: playerX - PLAYER_SIZE / 2,
-          y: playerY - PLAYER_SIZE / 2,
-          w: PLAYER_SIZE,
-          h: PLAYER_SIZE
+      function getPlayerRect(){
+        return{
+          x:playerX-PLAYER_SIZE/2,
+          y:playerY-PLAYER_SIZE/2,
+          w:PLAYER_SIZE,
+          h:PLAYER_SIZE
         };
       }
 
-      function checkCollisions() {
-        if (performance.now() < invincibleUntil) return;
-
-        const gh = gameEl.clientHeight;
-        const playerRect = getPlayerRect();
-
-        for (const s of spikes) {
-          if (rectsOverlap(playerRect, s)) {
-            endGame(false);
-            return;
-          }
-        }
-
-        // Floor = death
-        if (playerRect.y + playerRect.h >= gh) {
-          endGame(false);
-          return;
-        }
-
-        // Roof = clamp, no death
-        if (playerRect.y <= 0) {
-          playerY = PLAYER_SIZE / 2;
-          velY = 0;
-          updatePlayerEl();
-        }
-
-        // Goal
-        if (goal && rectsOverlap(playerRect, goal)) {
-          endGame(true);
-        }
+      function overlaps(a,b){
+        return !(a.x+a.w<b.x||a.x>b.x+b.w||a.y+a.h<b.y||a.y>b.y+b.h);
       }
 
-      // ----- GAME LOOP ---------------------------------------------------
+      function checkCollisions(){
+        if(performance.now()<invincibleUntil)return;
 
-      function gameLoop(timestamp) {
-        if (lastTimestamp == null) lastTimestamp = timestamp;
-        const dt = (timestamp - lastTimestamp) / 1000;
-        lastTimestamp = timestamp;
+        const gh=gameEl.clientHeight;
+        const r=getPlayerRect();
 
-        if (state === 'running') {
-          const gw = gameEl.clientWidth;
+        for(const s of spikes)if(overlaps(r,s))return end(false);
 
-          playerX += HORIZONTAL_SPEED * dt;
+        if(r.y+r.h>=gh)return end(false);
 
-          velY += GRAVITY * dt;
-          if (velY > MAX_FALL_SPEED) velY = MAX_FALL_SPEED;
-          playerY += velY * dt;
+        if(r.y<=0){playerY=PLAYER_SIZE/2;velY=0;}
 
-          const minX = PLAYER_SIZE / 2;
-          const maxX = gw - PLAYER_SIZE / 2;
-          if (playerX > maxX) playerX = maxX;
-          if (playerX < minX) playerX = minX;
+        if(goal&&overlaps(r,goal))end(true);
+      }
 
-          updatePlayerEl();
+      function loop(t){
+        if(lastT==null)lastT=t;
+        const dt=(t-lastT)/1000;
+        lastT=t;
+
+        if(state==='running'){
+          const gw=gameEl.clientWidth;
+
+          playerX+=HORIZONTAL_SPEED*dt;
+          velY+=GRAVITY*dt;
+          if(velY>MAX_FALL_SPEED)velY=MAX_FALL_SPEED;
+          playerY+=velY*dt;
+
+          const minX=PLAYER_SIZE/2, maxX=gw-PLAYER_SIZE/2;
+          if(playerX<minX)playerX=minX;
+          if(playerX>maxX)playerX=maxX;
+
+          playerEl.style.left=playerX+'px';
+          playerEl.style.top=playerY+'px';
+
           checkCollisions();
         }
 
-        rafId = requestAnimationFrame(gameLoop);
+        requestAnimationFrame(loop);
       }
 
-      // ----- START / END / REPLAY ---------------------------------------
-
-      function startGame() {
-        state = 'running';
-        resultOverlay.style.display = 'none';
-        startOverlay.style.display = 'none';
-        resetPlayerPosition();
-        lastTimestamp = null;
-        invincibleUntil = performance.now() + 600; // 0.6s grace
+      function start(){
+        state='running';
+        resultOverlay.style.display='none';
+        startOverlay.style.display='none';
+        resetPlayer();
+        lastT=null;
+        invincibleUntil=performance.now()+600;
       }
 
-      function endGame(won) {
-        if (state !== 'running') return;
-        state = won ? 'won' : 'dead';
-        resultMessage.textContent = won ? 'You Win! 🎉' : 'Game Over!';
-        resultOverlay.style.display = 'flex';
+      function end(won){
+        if(state!=='running')return;
+        state=won?'won':'dead';
+        resultMessage.textContent=won?'You Win! 🎉':'Game Over!';
+        resultOverlay.style.display='flex';
       }
 
-      function resetGameAndShowStart() {
-        state = 'ready';
-        resetPlayerPosition();
-        resultOverlay.style.display = 'none';
-        startOverlay.style.display = 'flex';
-        if (jumpLastFrame !== null) {
-          jumpAnim.goToAndStop(0, true);
-        }
+      function reset(){
+        state='ready';
+        resetPlayer();
+        resultOverlay.style.display='none';
+        startOverlay.style.display='flex';
+        if(jumpLastFrame!=null)jumpAnim.goToAndStop(0,true);
       }
 
-      // ----- EVENTS ------------------------------------------------------
+      /* EVENTS */
+      addTap(startButton,start);
+      addTap(replayButton,reset);
+      addTap(gameEl,()=>state==='running'&&flap());
 
-      addTapListener(startButton, (e) => {
-        e.stopPropagation();
-        startGame();
+      window.addEventListener('resize',()=>{
+        updatePlayerSize();
+        createHitboxes();
+        resetPlayer();
       });
 
-      addTapListener(replayButton, (e) => {
-        e.stopPropagation();
-        resetGameAndShowStart();
-      });
-
-      addTapListener(gameEl, () => {
-        if (state === 'running') flap();
-      });
-
-      // ----- INIT --------------------------------------------------------
-
+      /* INIT */
+      updatePlayerSize();
       createHitboxes();
-      resetPlayerPosition();
-      requestAnimationFrame(gameLoop);
+      resetPlayer();
+      requestAnimationFrame(loop);
     });
   </script>
 </body>
 </html>
-
