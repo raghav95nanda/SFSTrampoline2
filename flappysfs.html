@@ -180,6 +180,25 @@
   <script>
     window.addEventListener('load', () => {
       // ----- CONFIG ------------------------------------------------------
+// Treat tap/click as the same thing (mobile + desktop)
+function addTapListener(element, handler) {
+  let touched = false;
+
+  element.addEventListener('touchstart', function (e) {
+    touched = true;
+    e.preventDefault();     // stop scroll / zoom
+    handler(e);
+  }, { passive: false });
+
+  element.addEventListener('click', function (e) {
+    // Ignore the synthetic click after touch
+    if (touched) {
+      touched = false;
+      return;
+    }
+    handler(e);
+  });
+}
 
       // Every spike cluster from stage.svg, as relative rects
       const SPIKE_DEFS = [
@@ -470,25 +489,20 @@
       // ----- EVENTS ------------------------------------------------------
 
       // Start / replay (click works fine on mobile with viewport set)
-      startButton.addEventListener('click', (e) => {
-        e.stopPropagation();
-        startGame();
-      });
+addTapListener(startButton, (e) => {
+  e.stopPropagation();
+  startGame();
+});
 
-      replayButton.addEventListener('click', (e) => {
-        e.stopPropagation();
-        resetGameAndShowStart();
-      });
+addTapListener(replayButton, (e) => {
+  e.stopPropagation();
+  resetGameAndShowStart();
+});
 
-      // Flap: click OR touch on the stage
-      gameEl.addEventListener('click', () => {
-        if (state === 'running') flap();
-      });
+addTapListener(gameEl, () => {
+  if (state === 'running') flap();
+});
 
-      gameEl.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        if (state === 'running') flap();
-      }, { passive: false });
 
       // ----- INIT --------------------------------------------------------
 
@@ -499,5 +513,6 @@
   </script>
 </body>
 </html>
+
 
 
