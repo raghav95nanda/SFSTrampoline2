@@ -6,7 +6,7 @@
   <style>
     :root {
       --game-max-width: 900px;
-      --player-size: 40px; /* visual size; JS also uses 40px below */
+      --player-size: 40px;
     }
 
     body {
@@ -27,6 +27,22 @@
       border-radius: 16px;
       box-shadow: 0 10px 25px rgba(0,0,0,0.15);
       cursor: pointer;
+
+      /* 🧽 prevent click-drag selection highlight */
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    #game-container * {
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      user-select: none;
+    }
+
+    #game-container:focus {
+      outline: none;
     }
 
     #stage-bg {
@@ -71,6 +87,7 @@
       border: none;
       padding: 0;
       cursor: pointer;
+      outline: none;
     }
 
     #start-button img {
@@ -116,6 +133,7 @@
       color: #fff;
       font-weight: 600;
       box-shadow: 0 3px 6px rgba(0,0,0,0.3);
+      outline: none;
     }
 
     .hitbox {
@@ -123,6 +141,7 @@
       pointer-events: none;
     }
 
+    /* Turn SHOW_DEBUG_HITBOXES=true in JS to see these. */
     .hitbox.debug-spike {
       background: rgba(255, 0, 0, 0.25);
       outline: 1px solid rgba(255, 0, 0, 0.7);
@@ -162,19 +181,31 @@
     window.addEventListener('load', () => {
       // ----- CONFIG ------------------------------------------------------
 
-      // A few bottom spike hitboxes aligned to one cluster (easier game)
+      // Hitboxes derived from the actual spike polygons in stage.svg.
+      // Each is a *cluster* of spikes (top or bottom), so fewer but bigger hit areas.
       const SPIKE_DEFS = [
-        { x: 0.188, y: 0.74, width: 0.024, height: 0.28 },
-        { x: 0.218, y: 0.74, width: 0.024, height: 0.28 },
-        { x: 0.248, y: 0.74, width: 0.024, height: 0.28 }
+        // TOP LEFT CLUSTER (three groups)
+        { x: 0.1170, y: -0.20, width: 0.0211, height: 0.5860 },
+        { x: 0.1413, y: -0.20, width: 0.0211, height: 0.5860 },
+        { x: 0.1639, y: -0.20, width: 0.0211, height: 0.5860 },
+
+        // TOP MID CLUSTER
+        { x: 0.4001, y: -0.008, width: 0.0211, height: 0.252 },
+        { x: 0.4243, y: -0.008, width: 0.0211, height: 0.252 },
+        { x: 0.4470, y: -0.008, width: 0.0211, height: 0.252 },
+
+        // BOTTOM LEFT CLUSTER (floor spikes – these match the screenshot region)
+        { x: 0.1834, y: 0.754, width: 0.0211, height: 0.252 },
+        { x: 0.2077, y: 0.754, width: 0.0211, height: 0.252 },
+        { x: 0.2303, y: 0.754, width: 0.0211, height: 0.252 }
       ];
 
-      // Finish/checkered strip on the right of the SVG
+      // Finish/checkered strip at far right of stage.svg
       const GOAL_DEF = { x: 0.955, y: 0.10, width: 0.045, height: 0.80 };
 
-      const SHOW_DEBUG_HITBOXES = true; // toggle if you want to see hitboxes
+      const SHOW_DEBUG_HITBOXES = false; // set true to see red/green boxes
 
-      // Physics (easy-ish)
+      // Physics (gentle)
       const HORIZONTAL_SPEED = 80;
       const GRAVITY = 550;
       const FLAP_VELOCITY = -250;
@@ -191,6 +222,9 @@
       const resultOverlay = document.getElementById('result-overlay');
       const resultMessage = document.getElementById('result-message');
       const replayButton = document.getElementById('replay-button');
+
+      // Avoid text selection blue flash on mousedown
+      gameEl.addEventListener('mousedown', e => e.preventDefault());
 
       // Lottie
       const jumpAnim = lottie.loadAnimation({
@@ -294,6 +328,7 @@
         velY = FLAP_VELOCITY;
 
         if (jumpLastFrame !== null) {
+          // go to last frame, then play backwards slowly
           jumpAnim.setDirection(-1);
           jumpAnim.setSpeed(0.6);
           jumpAnim.goToAndStop(jumpLastFrame, true);
@@ -322,37 +357,35 @@
       }
 
       function checkCollisions() {
-  const gh = gameEl.clientHeight;
-  const playerRect = getPlayerRect();
+        const gh = gameEl.clientHeight;
+        const playerRect = getPlayerRect();
 
-  // Hit spikes?
-  for (const s of spikes) {
-    if (rectsOverlap(playerRect, s)) {
-      endGame(false);
-      return;
-    }
-  }
+        // Spikes
+        for (const s of spikes) {
+          if (rectsOverlap(playerRect, s)) {
+            endGame(false);
+            return;
+          }
+        }
 
-  // FLOOR: hitting the bottom is game over
-  if (playerRect.y + playerRect.h >= gh) {
-    endGame(false);
-    return;
-  }
+        // Floor = death
+        if (playerRect.y + playerRect.h >= gh) {
+          endGame(false);
+          return;
+        }
 
-  // ROOF: just clamp to top, don't end the game
-  if (playerRect.y <= 0) {
-    // keep the character inside the screen
-    playerY = PLAYER_SIZE / 2;
-    velY = 0;               // stop upward velocity so it "slides" along the roof
-    updatePlayerEl();
-  }
+        // Roof = clamp, no death
+        if (playerRect.y <= 0) {
+          playerY = PLAYER_SIZE / 2;
+          velY = 0;      // lose upward momentum
+          updatePlayerEl();
+        }
 
-  // Reached goal?
-  if (goal && rectsOverlap(playerRect, goal)) {
-    endGame(true);
-  }
-}
-
+        // Goal
+        if (goal && rectsOverlap(playerRect, goal)) {
+          endGame(true);
+        }
+      }
 
       // ----- GAME LOOP ---------------------------------------------------
 
@@ -434,4 +467,3 @@
   </script>
 </body>
 </html>
-
