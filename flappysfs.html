@@ -207,7 +207,7 @@
 
       // Physics
       const HORIZONTAL_SPEED = 80;
-      const GRAVITY = 550;
+      const GRAVITY = 350;
       const FLAP_VELOCITY = -250;
       const MAX_FALL_SPEED = 480;
 
@@ -311,7 +311,7 @@
       function resetPlayerPosition() {
         const gw = gameEl.clientWidth;
         const gh = gameEl.clientHeight;
-        playerX = gw * 0.18;
+        playerX = gw * 0.05;
         playerY = gh * 0.5;
         velY = 0;
         updatePlayerEl();
@@ -466,3 +466,4 @@
   </script>
 </body>
 </html>
+
