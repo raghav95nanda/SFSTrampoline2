@@ -60,7 +60,7 @@
       width: var(--player-size);
       height: var(--player-size);
       transform: translate(-50%, -50%);
-      left: 2%;
+      left: 18%;
       top: 50%;
       pointer-events: none;
     }
@@ -90,8 +90,9 @@
       outline: none;
     }
 
+    /* RESPONSIVE start button size: smaller on mobile, capped on desktop */
     #start-button img {
-      width: 180px;
+      width: min(140px, 30vw);
       height: auto;
       display: block;
     }
@@ -165,7 +166,7 @@
       <button id="start-button" type="button">
         <img src="Start.svg" alt="Start" />
       </button>
-      <div id="start-text">Tap START to play. Click inside to jump.</div>
+      <div id="start-text">Tap START to play. Tap the stage to jump.</div>
     </div>
 
     <!-- Result overlay -->
@@ -179,27 +180,8 @@
   <script>
     window.addEventListener('load', () => {
       // ----- CONFIG ------------------------------------------------------
-      // Helper: treat tap/click as the same thing (mobile + desktop)
-function addTapListener(element, handler) {
-  let touched = false;
 
-  element.addEventListener('touchstart', function (e) {
-    touched = true;
-    e.preventDefault();        // stop scrolling / text selection
-    handler(e);
-  }, { passive: false });
-
-  element.addEventListener('click', function (e) {
-    // Ignore the synthetic click that often follows a touch
-    if (touched) {
-      touched = false;
-      return;
-    }
-    handler(e);
-  });
-}
-
-      // Every spike group from stage.svg, converted to relative rects
+      // Every spike cluster from stage.svg, as relative rects
       const SPIKE_DEFS = [
         { x: 0.1170, y: -0.1995, width: 0.0211, height: 0.5860 },
         { x: 0.1413, y: -0.1995, width: 0.0211, height: 0.5860 },
@@ -221,25 +203,19 @@ function addTapListener(element, handler) {
         { x: 0.8497, y: -0.0639, width: 0.0211, height: 0.5860 }
       ];
 
-      // Make spike hitboxes slightly smaller & more forgiving
-    const SHRINK_X = 0.002;   // ≈ 3px at 1000px width
-    const SHRINK_Y = 0.005;    // ≈ 6–8px vertically
-
-      // Soften spike hitboxes a bit (smaller & shorter)
-    const HITBOX_SHRINK_X = 0.006;  // horizontally (~0.3% of width each side)
-    const HITBOX_SHRINK_Y = 0.04;  // vertically (~1.5% of height top & bottom)
-
-
-
-      // Finish/checkered strip on the right of the SVG
+      // Finish/checkered strip
       const GOAL_DEF = { x: 0.955, y: 0.10, width: 0.045, height: 0.80 };
 
-      const SHOW_DEBUG_HITBOXES = false; // set true to see red/green boxes
+      const SHOW_DEBUG_HITBOXES = false; // set true to see hitboxes
+
+      // Soften spike hitboxes slightly (narrower & shorter)
+      const HITBOX_SHRINK_X = 0.003;  // ~0.3% width each side
+      const HITBOX_SHRINK_Y = 0.015;  // ~1.5% height top & bottom
 
       // Physics
       const HORIZONTAL_SPEED = 80;
-      const GRAVITY = 350;
-      const FLAP_VELOCITY = -120;
+      const GRAVITY = 550;
+      const FLAP_VELOCITY = -250;
       const MAX_FALL_SPEED = 480;
 
       const PLAYER_SIZE = 40; // keep in sync with --player-size
@@ -254,7 +230,7 @@ function addTapListener(element, handler) {
       const resultMessage = document.getElementById('result-message');
       const replayButton = document.getElementById('replay-button');
 
-      // Avoid blue selection flash
+      // Prevent blue selection flash on desktop
       gameEl.addEventListener('mousedown', e => e.preventDefault());
 
       // Lottie (jump only)
@@ -286,62 +262,63 @@ function addTapListener(element, handler) {
       let lastTimestamp = null;
       let rafId = null;
 
+      // tiny grace period after starting to avoid instant death
+      let invincibleUntil = 0;
+
       // ----- HITBOXES ----------------------------------------------------
 
-function createHitboxes() {
-  // remove old boxes
-  spikes.forEach(s => s.el.remove());
-  spikes = [];
-  if (goal && goal.el) goal.el.remove();
-  goal = null;
+      function createHitboxes() {
+        spikes.forEach(s => s.el.remove());
+        spikes = [];
+        if (goal && goal.el) goal.el.remove();
+        goal = null;
 
-  const gw = gameEl.clientWidth;
-  const gh = gameEl.clientHeight;
+        const gw = gameEl.clientWidth;
+        const gh = gameEl.clientHeight;
 
-  // --- SPIKES ---
-  SPIKE_DEFS.forEach(def => {
-    const el = document.createElement('div');
-    el.className = 'hitbox' + (SHOW_DEBUG_HITBOXES ? ' debug-spike' : '');
-    gameEl.appendChild(el);
+        // spikes
+        SPIKE_DEFS.forEach(def => {
+          const el = document.createElement('div');
+          el.className = 'hitbox' + (SHOW_DEBUG_HITBOXES ? ' debug-spike' : '');
+          gameEl.appendChild(el);
 
-    // raw box from SVG percentages
-    const rawX = def.x * gw;
-    const rawY = def.y * gh;
-    const rawW = def.width  * gw;
-    const rawH = def.height * gh;
+          // original rect in pixels
+          const rawX = def.x * gw;
+          const rawY = def.y * gh;
+          const rawW = def.width  * gw;
+          const rawH = def.height * gh;
 
-    // ✅ shrink on all sides
-    const x = rawX + HITBOX_SHRINK_X * gw;
-    const y = rawY + HITBOX_SHRINK_Y * gh;
-    const w = Math.max(0, rawW - 2 * HITBOX_SHRINK_X * gw);
-    const h = Math.max(0, rawH - 2 * HITBOX_SHRINK_Y * gh);
+          // shrink inwards on all sides
+          const x = rawX + HITBOX_SHRINK_X * gw;
+          const y = rawY + HITBOX_SHRINK_Y * gh;
+          const w = Math.max(0, rawW - 2 * HITBOX_SHRINK_X * gw);
+          const h = Math.max(0, rawH - 2 * HITBOX_SHRINK_Y * gh);
 
-    el.style.left   = x + 'px';
-    el.style.top    = y + 'px';
-    el.style.width  = w + 'px';
-    el.style.height = h + 'px';
+          el.style.left   = x + 'px';
+          el.style.top    = y + 'px';
+          el.style.width  = w + 'px';
+          el.style.height = h + 'px';
 
-    spikes.push({ x, y, w, h, el });
-  });
+          spikes.push({ x, y, w, h, el });
+        });
 
-  // --- GOAL (unchanged, still full size) ---
-  const gEl = document.createElement('div');
-  gEl.className = 'hitbox' + (SHOW_DEBUG_HITBOXES ? ' debug-goal' : '');
-  gameEl.appendChild(gEl);
+        // goal (full size)
+        const gEl = document.createElement('div');
+        gEl.className = 'hitbox' + (SHOW_DEBUG_HITBOXES ? ' debug-goal' : '');
+        gameEl.appendChild(gEl);
 
-  const gx   = GOAL_DEF.x * gw;
-  const gy   = GOAL_DEF.y * gh;
-  const gwid = GOAL_DEF.width  * gw;
-  const ghgt = GOAL_DEF.height * gh;
+        const gx   = GOAL_DEF.x * gw;
+        const gy   = GOAL_DEF.y * gh;
+        const gwid = GOAL_DEF.width  * gw;
+        const ghgt = GOAL_DEF.height * gh;
 
-  gEl.style.left   = gx   + 'px';
-  gEl.style.top    = gy   + 'px';
-  gEl.style.width  = gwid + 'px';
-  gEl.style.height = ghgt + 'px';
+        gEl.style.left   = gx   + 'px';
+        gEl.style.top    = gy   + 'px';
+        gEl.style.width  = gwid + 'px';
+        gEl.style.height = ghgt + 'px';
 
-  goal = { x: gx, y: gy, w: gwid, h: ghgt, el: gEl };
-}
-
+        goal = { x: gx, y: gy, w: gwid, h: ghgt, el: gEl };
+      }
 
       window.addEventListener('resize', () => {
         createHitboxes();
@@ -353,7 +330,8 @@ function createHitboxes() {
       function resetPlayerPosition() {
         const gw = gameEl.clientWidth;
         const gh = gameEl.clientHeight;
-        playerX = gw * 0.05;
+        // start further left but safely before first spikes
+        playerX = gw * 0.10;
         playerY = gh * 0.5;
         velY = 0;
         updatePlayerEl();
@@ -370,6 +348,7 @@ function createHitboxes() {
         velY = FLAP_VELOCITY;
 
         if (jumpLastFrame !== null) {
+          // go to last frame, then play backwards slowly
           jumpAnim.setDirection(-1);
           jumpAnim.setSpeed(0.6);
           jumpAnim.goToAndStop(jumpLastFrame, true);
@@ -398,10 +377,13 @@ function createHitboxes() {
       }
 
       function checkCollisions() {
+        // grace period after start -> ignore collisions
+        if (performance.now() < invincibleUntil) return;
+
         const gh = gameEl.clientHeight;
         const playerRect = getPlayerRect();
 
-        // Spikes
+        // spikes
         for (const s of spikes) {
           if (rectsOverlap(playerRect, s)) {
             endGame(false);
@@ -409,20 +391,20 @@ function createHitboxes() {
           }
         }
 
-        // Floor = death
+        // floor = death
         if (playerRect.y + playerRect.h >= gh) {
           endGame(false);
           return;
         }
 
-        // Roof = clamp, no death
+        // roof = clamp (no death)
         if (playerRect.y <= 0) {
           playerY = PLAYER_SIZE / 2;
           velY = 0;
           updatePlayerEl();
         }
 
-        // Goal
+        // goal
         if (goal && rectsOverlap(playerRect, goal)) {
           endGame(true);
         }
@@ -464,6 +446,8 @@ function createHitboxes() {
         startOverlay.style.display = 'none';
         resetPlayerPosition();
         lastTimestamp = null;
+        // 600ms of invincibility on start
+        invincibleUntil = performance.now() + 600;
       }
 
       function endGame(won) {
@@ -485,20 +469,26 @@ function createHitboxes() {
 
       // ----- EVENTS ------------------------------------------------------
 
-      addTapListener(startButton, (e) => {
-  e.stopPropagation();
-  startGame();
-});
+      // Start / replay (click works fine on mobile with viewport set)
+      startButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        startGame();
+      });
 
-addTapListener(replayButton, (e) => {
-  e.stopPropagation();
-  resetGameAndShowStart();
-});
+      replayButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        resetGameAndShowStart();
+      });
 
-addTapListener(gameEl, () => {
-  if (state === 'running') flap();
-});
+      // Flap: click OR touch on the stage
+      gameEl.addEventListener('click', () => {
+        if (state === 'running') flap();
+      });
 
+      gameEl.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (state === 'running') flap();
+      }, { passive: false });
 
       // ----- INIT --------------------------------------------------------
 
@@ -509,14 +499,3 @@ addTapListener(gameEl, () => {
   </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
