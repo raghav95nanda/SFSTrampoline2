@@ -28,7 +28,6 @@
       box-shadow: 0 10px 25px rgba(0,0,0,0.15);
       cursor: pointer;
 
-      /* 🧽 prevent click-drag selection highlight */
       -webkit-user-select: none;
       -moz-user-select: none;
       user-select: none;
@@ -60,7 +59,7 @@
       width: var(--player-size);
       height: var(--player-size);
       transform: translate(-50%, -50%);
-      left: 5%;
+      left: 2%;
       top: 50%;
       pointer-events: none;
     }
@@ -141,7 +140,6 @@
       pointer-events: none;
     }
 
-    /* Turn SHOW_DEBUG_HITBOXES=true in JS to see these. */
     .hitbox.debug-spike {
       background: rgba(255, 0, 0, 0.25);
       outline: 1px solid rgba(255, 0, 0, 0.7);
@@ -180,42 +178,34 @@
   <script>
     window.addEventListener('load', () => {
       // ----- CONFIG ------------------------------------------------------
-
-      // Hitboxes derived from the actual spike polygons in stage.svg.
-      // Each is a *cluster* of spikes (top or bottom), so fewer but bigger hit areas.
+      // Every spike group from stage.svg, converted to relative rects
       const SPIKE_DEFS = [
-  // TOP LEFT CLUSTER (3 big spike groups)
-  { x: 0.1170, y: -0.20, width: 0.0211, height: 0.5860 },
-  { x: 0.1413, y: -0.20, width: 0.0211, height: 0.5860 },
-  { x: 0.1639, y: -0.20, width: 0.0211, height: 0.5860 },
+        { x: 0.1170, y: -0.1995, width: 0.0211, height: 0.5860 },
+        { x: 0.1413, y: -0.1995, width: 0.0211, height: 0.5860 },
+        { x: 0.1639, y: -0.1995, width: 0.0211, height: 0.5860 },
 
-  // TOP MID CLUSTER
-  { x: 0.4001, y: -0.008, width: 0.0211, height: 0.252 },
-  { x: 0.4243, y: -0.008, width: 0.0211, height: 0.252 },
-  { x: 0.4470, y: -0.008, width: 0.0211, height: 0.252 },
+        { x: 0.1834, y: 0.7545, width: 0.0211, height: 0.2518 },
+        { x: 0.2077, y: 0.7545, width: 0.0211, height: 0.2518 },
+        { x: 0.2303, y: 0.7545, width: 0.0211, height: 0.2518 },
 
-  // BOTTOM LEFT CLUSTER
-  { x: 0.1834, y: 0.754, width: 0.0211, height: 0.252 },
-  { x: 0.2077, y: 0.754, width: 0.0211, height: 0.252 },
-  { x: 0.2303, y: 0.754, width: 0.0211, height: 0.252 },
+        { x: 0.4001, y: -0.0082, width: 0.0211, height: 0.2518 },
+        { x: 0.4243, y: -0.0082, width: 0.0211, height: 0.2518 },
+        { x: 0.4470, y: -0.0082, width: 0.0211, height: 0.2518 },
 
-  // 🔽 NEW: BOTTOM MID CLUSTER (3 spikes under the start text)
-  { x: 0.4100, y: 0.754, width: 0.0211, height: 0.252 },
-  { x: 0.4340, y: 0.754, width: 0.0211, height: 0.252 },
-  { x: 0.4580, y: 0.754, width: 0.0211, height: 0.252 },
+        { x: 0.5461, y: 0.5801, width: 0.0211, height: 0.5860 },
+        { x: 0.5704, y: 0.5801, width: 0.0211, height: 0.5860 },
+        { x: 0.5930, y: 0.5801, width: 0.0211, height: 0.5860 },
 
-  // 🔽 NEW: BOTTOM RIGHT LONERS (2 single spikes closer to the goal)
-  { x: 0.7050, y: 0.754, width: 0.0211, height: 0.252 },
-  { x: 0.7900, y: 0.754, width: 0.0211, height: 0.252 }
-];
+        { x: 0.7401, y: 0.4203, width: 0.0211, height: 0.5860 },
+        { x: 0.8497, y: -0.0639, width: 0.0211, height: 0.5860 }
+      ];
 
-
-      // Finish/checkered strip at far right of stage.svg
+      // Finish/checkered strip on the right of the SVG
       const GOAL_DEF = { x: 0.955, y: 0.10, width: 0.045, height: 0.80 };
 
       const SHOW_DEBUG_HITBOXES = true; // set true to see red/green boxes
 
-      // Physics (gentle)
+      // Physics
       const HORIZONTAL_SPEED = 80;
       const GRAVITY = 550;
       const FLAP_VELOCITY = -250;
@@ -233,10 +223,10 @@
       const resultMessage = document.getElementById('result-message');
       const replayButton = document.getElementById('replay-button');
 
-      // Avoid text selection blue flash on mousedown
+      // Avoid blue selection flash
       gameEl.addEventListener('mousedown', e => e.preventDefault());
 
-      // Lottie
+      // Lottie (jump only)
       const jumpAnim = lottie.loadAnimation({
         container: document.getElementById('player-lottie'),
         renderer: 'svg',
@@ -316,7 +306,7 @@
         resetPlayerPosition();
       });
 
-      // ----- PLAYER / ANIMATION -----------------------------------------
+      // ----- PLAYER & ANIMATION -----------------------------------------
 
       function resetPlayerPosition() {
         const gw = gameEl.clientWidth;
@@ -338,7 +328,6 @@
         velY = FLAP_VELOCITY;
 
         if (jumpLastFrame !== null) {
-          // go to last frame, then play backwards slowly
           jumpAnim.setDirection(-1);
           jumpAnim.setSpeed(0.6);
           jumpAnim.goToAndStop(jumpLastFrame, true);
@@ -346,7 +335,7 @@
         }
       }
 
-      // ----- COLLISION ---------------------------------------------------
+      // ----- COLLISIONS --------------------------------------------------
 
       function rectsOverlap(a, b) {
         return !(
@@ -387,7 +376,7 @@
         // Roof = clamp, no death
         if (playerRect.y <= 0) {
           playerY = PLAYER_SIZE / 2;
-          velY = 0;      // lose upward momentum
+          velY = 0;
           updatePlayerEl();
         }
 
@@ -477,5 +466,3 @@
   </script>
 </body>
 </html>
-
-
