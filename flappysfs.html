@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
   <title>Balloon Flappy Game</title>
   <style>
     :root {
@@ -178,6 +179,26 @@
   <script>
     window.addEventListener('load', () => {
       // ----- CONFIG ------------------------------------------------------
+      // Helper: treat tap/click as the same thing (mobile + desktop)
+function addTapListener(element, handler) {
+  let touched = false;
+
+  element.addEventListener('touchstart', function (e) {
+    touched = true;
+    e.preventDefault();        // stop scrolling / text selection
+    handler(e);
+  }, { passive: false });
+
+  element.addEventListener('click', function (e) {
+    // Ignore the synthetic click that often follows a touch
+    if (touched) {
+      touched = false;
+      return;
+    }
+    handler(e);
+  });
+}
+
       // Every spike group from stage.svg, converted to relative rects
       const SPIKE_DEFS = [
         { x: 0.1170, y: -0.1995, width: 0.0211, height: 0.5860 },
@@ -464,19 +485,20 @@ function createHitboxes() {
 
       // ----- EVENTS ------------------------------------------------------
 
-      startButton.addEventListener('click', (e) => {
-        e.stopPropagation();
-        startGame();
-      });
+      addTapListener(startButton, (e) => {
+  e.stopPropagation();
+  startGame();
+});
 
-      replayButton.addEventListener('click', (e) => {
-        e.stopPropagation();
-        resetGameAndShowStart();
-      });
+addTapListener(replayButton, (e) => {
+  e.stopPropagation();
+  resetGameAndShowStart();
+});
 
-      gameEl.addEventListener('click', () => {
-        if (state === 'running') flap();
-      });
+addTapListener(gameEl, () => {
+  if (state === 'running') flap();
+});
+
 
       // ----- INIT --------------------------------------------------------
 
@@ -487,6 +509,7 @@ function createHitboxes() {
   </script>
 </body>
 </html>
+
 
 
 
