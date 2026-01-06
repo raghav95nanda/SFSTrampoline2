@@ -7,7 +7,26 @@
   <style>
     :root {
       --game-max-width: 900px;
-      --player-size: 40px;
+
+      /* 🔧 Character size knobs */
+      --player-size-desktop: 40px;
+      --player-size-mobile: 26px;  /* smaller on mobile */
+      --player-size: var(--player-size-desktop);
+
+      /* 🔧 Stage aspect ratio knobs (width / height)
+         Bigger number = wider / shorter
+         Smaller number = narrower / TALLER
+      */
+      --stage-aspect-desktop: 4.6; /* ~original */
+      --stage-aspect-mobile: 3.0;  /* taller on mobile */
+      --stage-aspect: var(--stage-aspect-desktop);
+    }
+
+    @media (max-width: 768px) {
+      :root {
+        --player-size: var(--player-size-mobile);
+        --stage-aspect: var(--stage-aspect-mobile);
+      }
     }
 
     body {
@@ -22,7 +41,7 @@
     #game-container {
       position: relative;
       width: min(100%, var(--game-max-width));
-      aspect-ratio: 2906 / 632; /* same as stage.svg */
+      aspect-ratio: var(--stage-aspect);  /* 🧱 stage height controlled here */
       background: transparent;
       overflow: hidden;
       border-radius: 16px;
@@ -90,7 +109,7 @@
       outline: none;
     }
 
-    /* RESPONSIVE start button size: smaller on mobile, capped on desktop */
+    /* Responsive start button size */
     #start-button img {
       width: min(140px, 30vw);
       height: auto;
@@ -180,27 +199,8 @@
   <script>
     window.addEventListener('load', () => {
       // ----- CONFIG ------------------------------------------------------
-// Treat tap/click as the same thing (mobile + desktop)
-function addTapListener(element, handler) {
-  let touched = false;
 
-  element.addEventListener('touchstart', function (e) {
-    touched = true;
-    e.preventDefault();     // stop scroll / zoom
-    handler(e);
-  }, { passive: false });
-
-  element.addEventListener('click', function (e) {
-    // Ignore the synthetic click after touch
-    if (touched) {
-      touched = false;
-      return;
-    }
-    handler(e);
-  });
-}
-
-      // Every spike cluster from stage.svg, as relative rects
+      // Spike clusters from stage.svg
       const SPIKE_DEFS = [
         { x: 0.1170, y: -0.1995, width: 0.0211, height: 0.5860 },
         { x: 0.1413, y: -0.1995, width: 0.0211, height: 0.5860 },
@@ -222,14 +222,13 @@ function addTapListener(element, handler) {
         { x: 0.8497, y: -0.0639, width: 0.0211, height: 0.5860 }
       ];
 
-      // Finish/checkered strip
       const GOAL_DEF = { x: 0.955, y: 0.10, width: 0.045, height: 0.80 };
 
-      const SHOW_DEBUG_HITBOXES = false; // set true to see hitboxes
+      const SHOW_DEBUG_HITBOXES = false;
 
-      // Soften spike hitboxes slightly (narrower & shorter)
-      const HITBOX_SHRINK_X = 0.006;  // ~0.3% width each side
-      const HITBOX_SHRINK_Y = 0.04;  // ~1.5% height top & bottom
+      // Soften spike hitboxes slightly
+      const HITBOX_SHRINK_X = 0.006;
+      const HITBOX_SHRINK_Y = 0.04;
 
       // Physics
       const HORIZONTAL_SPEED = 80;
@@ -237,7 +236,16 @@ function addTapListener(element, handler) {
       const FLAP_VELOCITY = -120;
       const MAX_FALL_SPEED = 480;
 
-      const PLAYER_SIZE = 40; // keep in sync with --player-size
+      // PLAYER_SIZE will be read from CSS so mobile vs desktop works
+      let PLAYER_SIZE = 40;
+
+      function updatePlayerSizeFromCSS() {
+        const rootStyles = getComputedStyle(document.documentElement);
+        const cssSize = parseFloat(rootStyles.getPropertyValue('--player-size'));
+        PLAYER_SIZE = isNaN(cssSize) ? 40 : cssSize;
+      }
+
+      updatePlayerSizeFromCSS();
 
       // ----- DOM ---------------------------------------------------------
 
@@ -267,6 +275,26 @@ function addTapListener(element, handler) {
         jumpAnim.goToAndStop(0, true);
       });
 
+      // ----- Tap helper (mobile + desktop) -------------------------------
+
+      function addTapListener(element, handler) {
+        let touched = false;
+
+        element.addEventListener('touchstart', function (e) {
+          touched = true;
+          e.preventDefault();
+          handler(e);
+        }, { passive: false });
+
+        element.addEventListener('click', function (e) {
+          if (touched) {
+            touched = false;
+            return;
+          }
+          handler(e);
+        });
+      }
+
       // ----- STATE -------------------------------------------------------
 
       let state = 'ready'; // 'ready' | 'running' | 'dead' | 'won'
@@ -281,8 +309,7 @@ function addTapListener(element, handler) {
       let lastTimestamp = null;
       let rafId = null;
 
-      // tiny grace period after starting to avoid instant death
-      let invincibleUntil = 0;
+      let invincibleUntil = 0; // ms timestamp
 
       // ----- HITBOXES ----------------------------------------------------
 
@@ -295,19 +322,16 @@ function addTapListener(element, handler) {
         const gw = gameEl.clientWidth;
         const gh = gameEl.clientHeight;
 
-        // spikes
         SPIKE_DEFS.forEach(def => {
           const el = document.createElement('div');
           el.className = 'hitbox' + (SHOW_DEBUG_HITBOXES ? ' debug-spike' : '');
           gameEl.appendChild(el);
 
-          // original rect in pixels
           const rawX = def.x * gw;
           const rawY = def.y * gh;
           const rawW = def.width  * gw;
           const rawH = def.height * gh;
 
-          // shrink inwards on all sides
           const x = rawX + HITBOX_SHRINK_X * gw;
           const y = rawY + HITBOX_SHRINK_Y * gh;
           const w = Math.max(0, rawW - 2 * HITBOX_SHRINK_X * gw);
@@ -321,7 +345,6 @@ function addTapListener(element, handler) {
           spikes.push({ x, y, w, h, el });
         });
 
-        // goal (full size)
         const gEl = document.createElement('div');
         gEl.className = 'hitbox' + (SHOW_DEBUG_HITBOXES ? ' debug-goal' : '');
         gameEl.appendChild(gEl);
@@ -340,6 +363,7 @@ function addTapListener(element, handler) {
       }
 
       window.addEventListener('resize', () => {
+        updatePlayerSizeFromCSS();
         createHitboxes();
         resetPlayerPosition();
       });
@@ -349,8 +373,7 @@ function addTapListener(element, handler) {
       function resetPlayerPosition() {
         const gw = gameEl.clientWidth;
         const gh = gameEl.clientHeight;
-        // start further left but safely before first spikes
-        playerX = gw * 0.10;
+        playerX = gw * 0.10;  // a bit further left
         playerY = gh * 0.5;
         velY = 0;
         updatePlayerEl();
@@ -367,7 +390,6 @@ function addTapListener(element, handler) {
         velY = FLAP_VELOCITY;
 
         if (jumpLastFrame !== null) {
-          // go to last frame, then play backwards slowly
           jumpAnim.setDirection(-1);
           jumpAnim.setSpeed(0.6);
           jumpAnim.goToAndStop(jumpLastFrame, true);
@@ -396,13 +418,11 @@ function addTapListener(element, handler) {
       }
 
       function checkCollisions() {
-        // grace period after start -> ignore collisions
         if (performance.now() < invincibleUntil) return;
 
         const gh = gameEl.clientHeight;
         const playerRect = getPlayerRect();
 
-        // spikes
         for (const s of spikes) {
           if (rectsOverlap(playerRect, s)) {
             endGame(false);
@@ -410,20 +430,20 @@ function addTapListener(element, handler) {
           }
         }
 
-        // floor = death
+        // Floor = death
         if (playerRect.y + playerRect.h >= gh) {
           endGame(false);
           return;
         }
 
-        // roof = clamp (no death)
+        // Roof = clamp, no death
         if (playerRect.y <= 0) {
           playerY = PLAYER_SIZE / 2;
           velY = 0;
           updatePlayerEl();
         }
 
-        // goal
+        // Goal
         if (goal && rectsOverlap(playerRect, goal)) {
           endGame(true);
         }
@@ -465,8 +485,7 @@ function addTapListener(element, handler) {
         startOverlay.style.display = 'none';
         resetPlayerPosition();
         lastTimestamp = null;
-        // 600ms of invincibility on start
-        invincibleUntil = performance.now() + 600;
+        invincibleUntil = performance.now() + 600; // 0.6s grace
       }
 
       function endGame(won) {
@@ -488,21 +507,19 @@ function addTapListener(element, handler) {
 
       // ----- EVENTS ------------------------------------------------------
 
-      // Start / replay (click works fine on mobile with viewport set)
-addTapListener(startButton, (e) => {
-  e.stopPropagation();
-  startGame();
-});
+      addTapListener(startButton, (e) => {
+        e.stopPropagation();
+        startGame();
+      });
 
-addTapListener(replayButton, (e) => {
-  e.stopPropagation();
-  resetGameAndShowStart();
-});
+      addTapListener(replayButton, (e) => {
+        e.stopPropagation();
+        resetGameAndShowStart();
+      });
 
-addTapListener(gameEl, () => {
-  if (state === 'running') flap();
-});
-
+      addTapListener(gameEl, () => {
+        if (state === 'running') flap();
+      });
 
       // ----- INIT --------------------------------------------------------
 
@@ -513,6 +530,3 @@ addTapListener(gameEl, () => {
   </script>
 </body>
 </html>
-
-
-
