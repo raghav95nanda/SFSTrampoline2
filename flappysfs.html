@@ -200,6 +200,11 @@
         { x: 0.8497, y: -0.0639, width: 0.0211, height: 0.5860 }
       ];
 
+      // Make spike hitboxes slightly smaller & more forgiving
+const SHRINK_X = 0.003;   // ≈ 3px at 1000px width
+const SHRINK_Y = 0.01;    // ≈ 6–8px vertically
+
+
       // Finish/checkered strip on the right of the SVG
       const GOAL_DEF = { x: 0.955, y: 0.10, width: 0.045, height: 0.80 };
 
@@ -266,23 +271,25 @@
         const gw = gameEl.clientWidth;
         const gh = gameEl.clientHeight;
 
-        SPIKE_DEFS.forEach(def => {
-          const el = document.createElement('div');
-          el.className = 'hitbox' + (SHOW_DEBUG_HITBOXES ? ' debug-spike' : '');
-          gameEl.appendChild(el);
+SPIKE_DEFS.forEach(def => {
+  const el = document.createElement('div');
+  el.className = 'hitbox' + (SHOW_DEBUG_HITBOXES ? ' debug-spike' : '');
+  gameEl.appendChild(el);
 
-          const x = def.x * gw;
-          const y = def.y * gh;
-          const w = def.width * gw;
-          const h = def.height * gh;
+  // 🔥 soften collision bounds
+  const x = (def.x + SHRINK_X) * gw;
+  const y = (def.y + SHRINK_Y) * gh;
+  const w = (def.width  - SHRINK_X * 2) * gw;
+  const h = (def.height - SHRINK_Y * 2) * gh;
 
-          el.style.left = x + 'px';
-          el.style.top = y + 'px';
-          el.style.width = w + 'px';
-          el.style.height = h + 'px';
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+  el.style.width = w + 'px';
+  el.style.height = h + 'px';
 
-          spikes.push({ x, y, w, h, el });
-        });
+  spikes.push({ x, y, w, h, el });
+});
+
 
         const gEl = document.createElement('div');
         gEl.className = 'hitbox' + (SHOW_DEBUG_HITBOXES ? ' debug-goal' : '');
@@ -466,6 +473,7 @@
   </script>
 </body>
 </html>
+
 
 
 
