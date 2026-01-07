@@ -2,12 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>3D Glasses Reveal</title>
+  <title>3D Glasses Mascot Reveal</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     html, body {
       margin: 0;
@@ -19,58 +17,62 @@
       overflow: hidden;
     }
 
-    .wrapper {
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
+    .ui {
+      position: fixed;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
       text-align: center;
-      pointer-events: none; /* so drag passes through except on the glasses */
+      z-index: 5;
+      pointer-events: none;
     }
 
     .title {
-      font-size: 1rem;
-      margin-bottom: 0.75rem;
-      opacity: 0.85;
+      font-size: 0.95rem;
+      opacity: 0.9;
     }
 
+    .hint {
+      font-size: 0.8rem;
+      opacity: 0.7;
+      margin-top: 4px;
+    }
+
+    /* Tiny mascot in the corner */
     #scene {
-      position: relative;
-      width: min(260px, 70vw);   /* keep it small / “tiny” */
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      height: 100px; /* ~100px tall character */
       user-select: none;
       pointer-events: none;
     }
 
     #mascot2D {
-      width: 100%;
+      height: 100%;
+      width: auto;
       display: block;
     }
 
-    .hint {
-      margin-top: 0.75rem;
-      font-size: 0.85rem;
-      opacity: 0.7;
-    }
-
-    /* Draggable 3D glasses window */
+    /* Draggable glasses window */
 
     #glassesContainer {
-      position: fixed;         /* can be dragged anywhere on the screen */
-      top: 10%;
+      position: fixed;
+      top: 25%;
       left: 50%;
       transform: translateX(-50%);
-      width: min(200px, 75vw); /* small glasses */
+      width: min(220px, 80vw);   /* small glasses */
       pointer-events: auto;
       cursor: grab;
       touch-action: none;
-      overflow: hidden;        /* acts as a clipping window */
+      overflow: hidden;          /* acts as clipping window */
       z-index: 10;
 
+      /* 3D mascot behind the glasses; will be aligned in JS */
       background-image: url("3D%20Mascot.png");
       background-repeat: no-repeat;
-      background-position: 0 0; /* updated in JS to match scene position */
-      background-size: cover;   /* will be overridden in JS to match scene size */
+      background-position: 0 0;
+      background-size: cover;
     }
 
     #glassesContainer.dragging {
@@ -87,19 +89,20 @@
   </style>
 </head>
 <body>
-  <div class="wrapper">
-    <div class="title">Drag the 3D glasses over the mascot</div>
-
-    <div id="scene">
-      <!-- 2D mascot base -->
-      <img id="mascot2D" src="2D-Mascot.png" alt="2D Mascot" />
-    </div>
-
-    <div class="hint">Where the glasses pass over the mascot, it pops into 3D.</div>
+  <div class="ui">
+    <div class="title">Drag the 3D glasses around the screen</div>
+    <div class="hint">When they pass over the tiny mascot, it pops into 3D.</div>
   </div>
 
-  <!-- Draggable glasses window that reveals the 3D mascot -->
+  <!-- Tiny 2D mascot in the corner -->
+  <div id="scene">
+    <img id="mascot2D" src="2D-Mascot.png" alt="2D Mascot" />
+  </div>
+
+  <!-- Draggable 3D glasses window -->
   <div id="glassesContainer">
+    <!-- IMPORTANT: the eye holes of this PNG should be transparent.
+         Then only those parts show the 3D mascot background behind it. -->
     <img id="glasses" src="3DGlasses.png" alt="3D Glasses" />
   </div>
 
@@ -113,22 +116,21 @@
       let offsetX = 0;
       let offsetY = 0;
 
-      // Ensure the 3D mascot background scales exactly like the 2D mascot
+      // Make 3D background scale to the same size as the (scaled) 2D mascot
       function updateBackgroundSize() {
         const rect = scene.getBoundingClientRect();
-        // Background should be the same size as the mascot area
         glassesContainer.style.backgroundSize = rect.width + "px " + rect.height + "px";
       }
 
+      // Align the 3D mascot under the glasses so it matches the 2D mascot below
       function updateBackgroundPosition() {
         const sceneRect = scene.getBoundingClientRect();
         const glassesRect = glassesContainer.getBoundingClientRect();
 
-        // Offset of the glasses relative to the scene
         const relLeft = glassesRect.left - sceneRect.left;
-        const relTop = glassesRect.top - sceneRect.top;
+        const relTop  = glassesRect.top  - sceneRect.top;
 
-        // Move background so what shows through is the correct part of the 3D mascot
+        // Negative offset so the part “under” the glasses matches the 2D mascot
         glassesContainer.style.backgroundPosition = `-${relLeft}px -${relTop}px`;
       }
 
@@ -151,7 +153,7 @@
         offsetX = e.clientX - rect.left;
         offsetY = e.clientY - rect.top;
 
-        // remove initial centering transform so absolute left/top work
+        // Remove initial centering transform so left/top work directly
         glassesContainer.style.transform = "none";
       });
 
@@ -159,20 +161,20 @@
         if (!isDragging) return;
 
         let left = e.clientX - offsetX;
-        let top = e.clientY - offsetY;
+        let top  = e.clientY - offsetY;
 
-        // Optional: keep the glasses on-screen
+        // Keep glasses roughly within the viewport
         const vw = window.innerWidth;
         const vh = window.innerHeight;
         const rect = glassesContainer.getBoundingClientRect();
-        const width = rect.width;
-        const height = rect.height;
+        const w = rect.width;
+        const h = rect.height;
 
-        left = Math.max(-width * 0.3, Math.min(left, vw - width * 0.7));
-        top = Math.max(-height * 0.3, Math.min(top, vh - height * 0.7));
+        left = Math.max(-w * 0.3, Math.min(left, vw - w * 0.7));
+        top  = Math.max(-h * 0.3, Math.min(top, vh - h * 0.7));
 
         glassesContainer.style.left = left + "px";
-        glassesContainer.style.top = top + "px";
+        glassesContainer.style.top  = top + "px";
 
         updateBackgroundPosition();
       });
@@ -187,7 +189,7 @@
       window.addEventListener("pointercancel", stopDrag);
       window.addEventListener("pointerleave", stopDrag);
 
-      // In case the 2D image is already cached
+      // In case image is cached and already loaded
       if (mascot2D.complete) {
         updateBackgroundSize();
         updateBackgroundPosition();
