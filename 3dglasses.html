@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>3D Glasses Mascot Reveal</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: #111;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #f5f5f5;
+    }
+
+    .wrapper {
+      text-align: center;
+    }
+
+    .title {
+      margin-bottom: 0.5rem;
+      font-size: 1.1rem;
+      opacity: 0.8;
+    }
+
+    /* Scene */
+
+    #scene {
+      position: relative;
+      width: min(70vw, 420px);
+      max-width: 420px;
+      margin: 0 auto;
+      user-select: none;
+    }
+
+    #mascot2D {
+      width: 100%;
+      display: block;
+    }
+
+    /* Draggable glasses + 3D mascot container */
+
+    #glassesContainer {
+      position: absolute;
+      top: 10%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 110%;
+      max-width: 110%;
+      cursor: grab;
+      touch-action: none;
+      overflow: hidden; /* hide 3D mascot outside the frame */
+      z-index: 2;
+    }
+
+    #glassesContainer.dragging {
+      cursor: grabbing;
+    }
+
+    /* 3D mascot sits underneath the glasses frame */
+    #mascot3D {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      pointer-events: none;
+      /* tweak this transform if you want to nudge the 3D model inside the frame */
+      transform: translateY(5%);
+    }
+
+    /* Glasses image on top so only eye holes show the 3D mascot */
+    #glasses {
+      width: 100%;
+      display: block;
+      pointer-events: none;
+      position: relative;
+      z-index: 3;
+    }
+
+    /* Small hint text on larger screens */
+    .hint {
+      margin-top: 0.75rem;
+      font-size: 0.9rem;
+      opacity: 0.7;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="title">Drag the 3D glasses over the mascot</div>
+    <div id="scene">
+      <!-- 2D mascot as the base layer -->
+      <img id="mascot2D" src="2D-Mascot.png" alt="2D mascot" />
+
+      <!-- Draggable group: 3D mascot revealed only through the transparent lenses -->
+      <div id="glassesContainer">
+        <img id="mascot3D" src="3D%20Mascot.png" alt="3D mascot" />
+        <img id="glasses" src="3DGlasses.png" alt="3D glasses" />
+      </div>
+    </div>
+    <div class="hint">On touch screens, drag with your finger.</div>
+  </div>
+
+  <script>
+    (function () {
+      const scene = document.getElementById("scene");
+      const container = document.getElementById("glassesContainer");
+
+      let isDragging = false;
+      let offsetX = 0;
+      let offsetY = 0;
+
+      container.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        isDragging = true;
+        container.classList.add("dragging");
+
+        const rect = container.getBoundingClientRect();
+        offsetX = e.clientX - rect.left;
+        offsetY = e.clientY - rect.top;
+
+        // Remove initial centering transform so left/top work naturally
+        container.style.transform = "none";
+      });
+
+      window.addEventListener("pointermove", (e) => {
+        if (!isDragging) return;
+
+        const sceneRect = scene.getBoundingClientRect();
+        const glassesRect = container.getBoundingClientRect();
+
+        let left = e.clientX - sceneRect.left - offsetX;
+        let top = e.clientY - sceneRect.top - offsetY;
+
+        // clamp movement so the glasses stay inside the scene
+        left = Math.max(0, Math.min(left, sceneRect.width - glassesRect.width));
+        top = Math.max(0, Math.min(top, sceneRect.height - glassesRect.height));
+
+        container.style.left = left + "px";
+        container.style.top = top + "px";
+      });
+
+      const stopDrag = () => {
+        if (!isDragging) return;
+        isDragging = false;
+        container.classList.remove("dragging");
+      };
+
+      window.addEventListener("pointerup", stopDrag);
+      window.addEventListener("pointercancel", stopDrag);
+      window.addEventListener("pointerleave", stopDrag);
+    })();
+  </script>
+</body>
+</html>
