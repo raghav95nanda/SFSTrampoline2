@@ -11,9 +11,8 @@
       margin: 0;
       padding: 0;
       height: 100%;
-      background: #111;
+      background: #ffffff;              /* white background */
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      color: #f5f5f5;
       overflow: hidden;
     }
 
@@ -25,56 +24,46 @@
       text-align: center;
       z-index: 5;
       pointer-events: none;
+      color: #222;
     }
-
-    .title {
+    .ui .title {
       font-size: 0.95rem;
       opacity: 0.9;
     }
-
-    .hint {
+    .ui .hint {
       font-size: 0.8rem;
       opacity: 0.7;
       margin-top: 4px;
     }
 
-    /* Tiny mascot in the corner */
+    /* 2D mascot in the center, about 100px tall */
     #scene {
       position: fixed;
-      bottom: 10px;
-      left: 10px;
-      height: 100px; /* ~100px tall character */
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      height: 100px;        /* ~100px tall */
       user-select: none;
       pointer-events: none;
     }
-
     #mascot2D {
       height: 100%;
       width: auto;
       display: block;
     }
 
-    /* Draggable glasses window */
-
+    /* Draggable glasses container */
     #glassesContainer {
       position: fixed;
-      top: 25%;
+      top: 30%;
       left: 50%;
       transform: translateX(-50%);
-      width: min(220px, 80vw);   /* small glasses */
+      width: min(260px, 80vw);  /* size of glasses */
       pointer-events: auto;
       cursor: grab;
       touch-action: none;
-      overflow: hidden;          /* acts as clipping window */
       z-index: 10;
-
-      /* 3D mascot behind the glasses; will be aligned in JS */
-      background-image: url("3D%20Mascot.png");
-      background-repeat: no-repeat;
-      background-position: 0 0;
-      background-size: cover;
     }
-
     #glassesContainer.dragging {
       cursor: grabbing;
     }
@@ -84,25 +73,51 @@
       display: block;
       pointer-events: none;
       position: relative;
-      z-index: 2;
+      z-index: 3;
+    }
+
+    /* Lenses: only these rectangles show the 3D mascot */
+    .lens {
+      position: absolute;
+      overflow: hidden;
+      pointer-events: none;
+      background-image: url("3D%20Mascot.png");
+      background-repeat: no-repeat;
+      background-size: cover;  /* will be set to mascot size via JS */
+      z-index: 1;
+    }
+
+    /* Approximate positions of eye holes in the PNG.
+       You can tweak left/top/width/height % values if needed. */
+    .lens.left {
+      left: 28%;     /* horizontal offset of left eye-hole in frame */
+      top: 32%;      /* vertical offset */
+      width: 18%;    /* eye-hole width */
+      height: 38%;   /* eye-hole height */
+    }
+    .lens.right {
+      right: 28%;
+      top: 32%;
+      width: 18%;
+      height: 38%;
     }
   </style>
 </head>
 <body>
   <div class="ui">
-    <div class="title">Drag the 3D glasses around the screen</div>
-    <div class="hint">When they pass over the tiny mascot, it pops into 3D.</div>
+    <div class="title">Drag the 3D glasses around</div>
+    <div class="hint">When the lenses pass over the mascot, it appears in 3D.</div>
   </div>
 
-  <!-- Tiny 2D mascot in the corner -->
+  <!-- Centered 2D mascot -->
   <div id="scene">
     <img id="mascot2D" src="2D-Mascot.png" alt="2D Mascot" />
   </div>
 
-  <!-- Draggable 3D glasses window -->
+  <!-- Draggable glasses + 3D reveal lenses -->
   <div id="glassesContainer">
-    <!-- IMPORTANT: the eye holes of this PNG should be transparent.
-         Then only those parts show the 3D mascot background behind it. -->
+    <div class="lens left"></div>
+    <div class="lens right"></div>
     <img id="glasses" src="3DGlasses.png" alt="3D Glasses" />
   </div>
 
@@ -111,39 +126,43 @@
       const scene = document.getElementById("scene");
       const glassesContainer = document.getElementById("glassesContainer");
       const mascot2D = document.getElementById("mascot2D");
+      const lenses = Array.from(document.querySelectorAll(".lens"));
 
       let isDragging = false;
       let offsetX = 0;
       let offsetY = 0;
 
-      // Make 3D background scale to the same size as the (scaled) 2D mascot
-      function updateBackgroundSize() {
+      function updateLensBackgroundSize() {
         const rect = scene.getBoundingClientRect();
-        glassesContainer.style.backgroundSize = rect.width + "px " + rect.height + "px";
+        lenses.forEach(lens => {
+          lens.style.backgroundSize = rect.width + "px " + rect.height + "px";
+        });
       }
 
-      // Align the 3D mascot under the glasses so it matches the 2D mascot below
-      function updateBackgroundPosition() {
+      function updateLensBackgroundPosition() {
         const sceneRect = scene.getBoundingClientRect();
-        const glassesRect = glassesContainer.getBoundingClientRect();
 
-        const relLeft = glassesRect.left - sceneRect.left;
-        const relTop  = glassesRect.top  - sceneRect.top;
+        lenses.forEach(lens => {
+          const lensRect = lens.getBoundingClientRect();
 
-        // Negative offset so the part “under” the glasses matches the 2D mascot
-        glassesContainer.style.backgroundPosition = `-${relLeft}px -${relTop}px`;
+          // Position of lens relative to mascot
+          const relLeft = lensRect.left - sceneRect.left;
+          const relTop = lensRect.top - sceneRect.top;
+
+          // Shift background so this lens shows the correct part of the 3D mascot
+          lens.style.backgroundPosition = `-${relLeft}px -${relTop}px`;
+        });
       }
 
-      mascot2D.addEventListener("load", () => {
-        updateBackgroundSize();
-        updateBackgroundPosition();
-      });
+      function updateAllLens() {
+        updateLensBackgroundSize();
+        updateLensBackgroundPosition();
+      }
 
-      window.addEventListener("resize", () => {
-        updateBackgroundSize();
-        updateBackgroundPosition();
-      });
+      mascot2D.addEventListener("load", updateAllLens);
+      window.addEventListener("resize", updateAllLens);
 
+      // Dragging logic for the glasses
       glassesContainer.addEventListener("pointerdown", (e) => {
         e.preventDefault();
         isDragging = true;
@@ -161,9 +180,9 @@
         if (!isDragging) return;
 
         let left = e.clientX - offsetX;
-        let top  = e.clientY - offsetY;
+        let top = e.clientY - offsetY;
 
-        // Keep glasses roughly within the viewport
+        // Keep glasses roughly on-screen
         const vw = window.innerWidth;
         const vh = window.innerHeight;
         const rect = glassesContainer.getBoundingClientRect();
@@ -176,23 +195,22 @@
         glassesContainer.style.left = left + "px";
         glassesContainer.style.top  = top + "px";
 
-        updateBackgroundPosition();
+        updateLensBackgroundPosition();
       });
 
-      const stopDrag = () => {
+      function stopDrag() {
         if (!isDragging) return;
         isDragging = false;
         glassesContainer.classList.remove("dragging");
-      };
+      }
 
       window.addEventListener("pointerup", stopDrag);
       window.addEventListener("pointercancel", stopDrag);
       window.addEventListener("pointerleave", stopDrag);
 
-      // In case image is cached and already loaded
+      // If the mascot image is already cached and loaded
       if (mascot2D.complete) {
-        updateBackgroundSize();
-        updateBackgroundPosition();
+        updateAllLens();
       }
     })();
   </script>
