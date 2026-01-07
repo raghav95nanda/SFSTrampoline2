@@ -11,7 +11,7 @@
       margin: 0;
       padding: 0;
       height: 100%;
-      background: #ffffff;              /* white background */
+      background: #ffffff;  /* white background */
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       overflow: hidden;
     }
@@ -36,13 +36,13 @@
       margin-top: 4px;
     }
 
-    /* 2D mascot in the center, about 100px tall */
+    /* 2D mascot, ~100px tall, centered */
     #scene {
       position: fixed;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      height: 100px;        /* ~100px tall */
+      height: 100px;   /* controls mascot height */
       user-select: none;
       pointer-events: none;
     }
@@ -58,7 +58,7 @@
       top: 30%;
       left: 50%;
       transform: translateX(-50%);
-      width: min(260px, 80vw);  /* size of glasses */
+      width: min(260px, 80vw);
       pointer-events: auto;
       cursor: grab;
       touch-action: none;
@@ -76,7 +76,8 @@
       z-index: 3;
     }
 
-    /* Lenses: only these rectangles show the 3D mascot */
+    /* Lenses: only these show the 3D mascot.
+       Positions are derived from the transparent eye-holes of 1536x386px glasses PNG. */
     .lens {
       position: absolute;
       overflow: hidden;
@@ -85,28 +86,31 @@
       background-repeat: no-repeat;
       background-size: cover;  /* will be set to mascot size via JS */
       z-index: 1;
+      background-color: white; /* when not over mascot, show white */
+      visibility: hidden;      /* only visible when overlapping mascot */
     }
 
-    /* Approximate positions of eye holes in the PNG.
-       You can tweak left/top/width/height % values if needed. */
+    /* Left eye-hole */
     .lens.left {
-      left: 28%;     /* horizontal offset of left eye-hole in frame */
-      top: 32%;      /* vertical offset */
-      width: 18%;    /* eye-hole width */
-      height: 38%;   /* eye-hole height */
+      left: 28.32%;
+      top: 12.7%;
+      width: 15.82%;
+      height: 39.64%;
     }
+
+    /* Right eye-hole */
     .lens.right {
-      right: 28%;
-      top: 32%;
-      width: 18%;
-      height: 38%;
+      left: 55.79%;
+      top: 12.7%;
+      width: 15.82%;
+      height: 39.64%;
     }
   </style>
 </head>
 <body>
   <div class="ui">
     <div class="title">Drag the 3D glasses around</div>
-    <div class="hint">When the lenses pass over the mascot, it appears in 3D.</div>
+    <div class="hint">When the lenses pass over the mascot, it pops into 3D.</div>
   </div>
 
   <!-- Centered 2D mascot -->
@@ -114,7 +118,7 @@
     <img id="mascot2D" src="2D-Mascot.png" alt="2D Mascot" />
   </div>
 
-  <!-- Draggable glasses + 3D reveal lenses -->
+  <!-- Draggable glasses + lens windows -->
   <div id="glassesContainer">
     <div class="lens left"></div>
     <div class="lens right"></div>
@@ -139,30 +143,42 @@
         });
       }
 
-      function updateLensBackgroundPosition() {
+      function updateLensBackgroundPositionAndVisibility() {
         const sceneRect = scene.getBoundingClientRect();
 
         lenses.forEach(lens => {
           const lensRect = lens.getBoundingClientRect();
 
-          // Position of lens relative to mascot
-          const relLeft = lensRect.left - sceneRect.left;
-          const relTop = lensRect.top - sceneRect.top;
+          // Check if this lens actually overlaps the mascot
+          const interLeft = Math.max(lensRect.left, sceneRect.left);
+          const interRight = Math.min(lensRect.right, sceneRect.right);
+          const interTop = Math.max(lensRect.top, sceneRect.top);
+          const interBottom = Math.min(lensRect.bottom, sceneRect.bottom);
 
-          // Shift background so this lens shows the correct part of the 3D mascot
-          lens.style.backgroundPosition = `-${relLeft}px -${relTop}px`;
+          if (interLeft >= interRight || interTop >= interBottom) {
+            // No overlap -> nothing visible in this lens
+            lens.style.visibility = "hidden";
+            return;
+          }
+
+          lens.style.visibility = "visible";
+
+          // Correct background-position so 3D lines up with 2D mascot
+          const offsetX = sceneRect.left - lensRect.left;
+          const offsetY = sceneRect.top - lensRect.top;
+          lens.style.backgroundPosition = offsetX + "px " + offsetY + "px";
         });
       }
 
-      function updateAllLens() {
+      function updateLenses() {
         updateLensBackgroundSize();
-        updateLensBackgroundPosition();
+        updateLensBackgroundPositionAndVisibility();
       }
 
-      mascot2D.addEventListener("load", updateAllLens);
-      window.addEventListener("resize", updateAllLens);
+      mascot2D.addEventListener("load", updateLenses);
+      window.addEventListener("resize", updateLenses);
 
-      // Dragging logic for the glasses
+      // Dragging logic
       glassesContainer.addEventListener("pointerdown", (e) => {
         e.preventDefault();
         isDragging = true;
@@ -180,7 +196,7 @@
         if (!isDragging) return;
 
         let left = e.clientX - offsetX;
-        let top = e.clientY - offsetY;
+        let top  = e.clientY - offsetY;
 
         // Keep glasses roughly on-screen
         const vw = window.innerWidth;
@@ -195,7 +211,7 @@
         glassesContainer.style.left = left + "px";
         glassesContainer.style.top  = top + "px";
 
-        updateLensBackgroundPosition();
+        updateLensBackgroundPositionAndVisibility();
       });
 
       function stopDrag() {
@@ -208,9 +224,9 @@
       window.addEventListener("pointercancel", stopDrag);
       window.addEventListener("pointerleave", stopDrag);
 
-      // If the mascot image is already cached and loaded
+      // If mascot image is already cached
       if (mascot2D.complete) {
-        updateAllLens();
+        updateLenses();
       }
     })();
   </script>
