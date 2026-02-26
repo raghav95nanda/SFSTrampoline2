@@ -314,7 +314,13 @@
 
       function jump(){
         if(state !== 'running') return;
-        if(!grounded) return;
+      
+        const groundY = getGroundY();
+        const nearGround = playerY >= (groundY - 2); // small tolerance
+      
+        if(!grounded && !nearGround) return;
+      
+        playerY = Math.min(playerY, groundY); // ensure we're not "below" ground
         velY = JUMP_VELOCITY;
         grounded = false;
         playJumpAnim();
