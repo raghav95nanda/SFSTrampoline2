@@ -217,8 +217,20 @@
 
       const SHOW_DEBUG = false;
 
-      const HITBOX_SHRINK_X = 0.006;
-      const HITBOX_SHRINK_Y = 0.04;
+let HITBOX_SHRINK_X = 0.006;
+let HITBOX_SHRINK_Y = 0.04;
+
+function updateHitboxShrink() {
+  const isMobile = window.innerWidth <= 768;
+
+  if (isMobile) {
+    HITBOX_SHRINK_X = 0.012;  // double horizontal shrink
+    HITBOX_SHRINK_Y = 0.08;   // double vertical shrink
+  } else {
+    HITBOX_SHRINK_X = 0.006;
+    HITBOX_SHRINK_Y = 0.04;
+  }
+}
 
       /* ✅ slower + floatier (mobile-friendly) */
       const GRAVITY = 450;
@@ -544,18 +556,20 @@ function createScrollingPattern(){
       });
 
       // ✅ resize/orientation change robustness
-      const handleResize = () => {
-        updatePlayerSize();
-        createScrollingPattern();
-        resetPlayer();
-        setHUD();
-      };
+const handleResize = () => {
+  updatePlayerSize();
+  updateHitboxShrink();   // 👈 add this
+  createScrollingPattern();
+  resetPlayer();
+  setHUD();
+};
 
       window.addEventListener('resize', handleResize);
       window.addEventListener('orientationchange', () => setTimeout(handleResize, 150));
 
       /* INIT */
       updatePlayerSize();
+      updateHitboxShrink();
       createScrollingPattern();
       resetPlayer();
       requestAnimationFrame(loop);
