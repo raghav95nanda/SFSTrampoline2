@@ -11,7 +11,7 @@
 
       /* Character size knobs */
       --player-size-desktop: 40px;
-      --player-size-mobile: 18px;
+      --player-size-mobile: 26px;
       --player-size: var(--player-size-desktop);
     }
 
@@ -324,6 +324,30 @@
         playJumpAnim();
       }
 
+      function getStageCoverMetrics(){
+  // Your original stage SVG aspect (same as the old container aspect ratio)
+  const STAGE_W = 2906;
+  const STAGE_H = 632;
+
+  const cw = gameEl.clientWidth;
+  const ch = gameEl.clientHeight;
+
+  // scale used by "cover"
+  const scale = Math.max(cw / STAGE_W, ch / STAGE_H);
+
+  const viewW = STAGE_W * scale;
+  const viewH = STAGE_H * scale;
+
+  // offsets (can be negative when cropped)
+  const offX = (cw - viewW) / 2;
+  const offY = (ch - viewH) / 2;
+
+  return { cw, ch, viewW, viewH, offX, offY };
+}
+
+
+      
+
       function getPlayerRect(){
         return {
           x: playerX - PLAYER_SIZE/2,
@@ -342,39 +366,43 @@
         spikes = [];
       }
 
-      function createScrollingPattern(){
-        clearSpikes();
+function createScrollingPattern(){
+  clearSpikes();
 
-        const gw = gameEl.clientWidth;
-        const gh = gameEl.clientHeight;
+  const { cw, ch, viewW, viewH, offX, offY } = getStageCoverMetrics();
 
-        for(let seg = 0; seg < SEGMENTS; seg++){
-          const segOffset = seg * gw;
+  // IMPORTANT:
+  // Your bg-track loops every 1 container width (cw),
+  // so each "segment" of hitboxes should also repeat every cw.
+  for(let seg = 0; seg < SEGMENTS; seg++){
+    const segOffset = seg * cw;
 
-          for(const d of SPIKE_DEFS){
-            const el = document.createElement('div');
-            el.className = 'hitbox' + (SHOW_DEBUG ? ' debug-spike' : '');
-            gameEl.appendChild(el);
+    for(const d of SPIKE_DEFS){
+      const el = document.createElement('div');
+      el.className = 'hitbox' + (SHOW_DEBUG ? ' debug-spike' : '');
+      gameEl.appendChild(el);
 
-            const rawX = d.x * gw + segOffset;
-            const rawY = d.y * gh;
-            const rawW = d.width * gw;
-            const rawH = d.height * gh;
+      // Map normalized SVG coords into the *covered* rendered stage space
+      const rawX = offX + (d.x * viewW) + segOffset;
+      const rawY = offY + (d.y * viewH);
+      const rawW = (d.width * viewW);
+      const rawH = (d.height * viewH);
 
-            const x = rawX + HITBOX_SHRINK_X * gw;
-            const y = rawY + HITBOX_SHRINK_Y * gh;
-            const w = Math.max(0, rawW - 2*HITBOX_SHRINK_X*gw);
-            const h = Math.max(0, rawH - 2*HITBOX_SHRINK_Y*gh);
+      // Shrink relative to rendered stage scale (NOT container size)
+      const x = rawX + HITBOX_SHRINK_X * viewW;
+      const y = rawY + HITBOX_SHRINK_Y * viewH;
+      const w = Math.max(0, rawW - 2 * HITBOX_SHRINK_X * viewW);
+      const h = Math.max(0, rawH - 2 * HITBOX_SHRINK_Y * viewH);
 
-            el.style.left = x + 'px';
-            el.style.top = y + 'px';
-            el.style.width = w + 'px';
-            el.style.height = h + 'px';
+      el.style.left = x + 'px';
+      el.style.top = y + 'px';
+      el.style.width = w + 'px';
+      el.style.height = h + 'px';
 
-            spikes.push({ x, y, w, h, el, passed:false });
-          }
-        }
-      }
+      spikes.push({ x, y, w, h, el, passed:false });
+    }
+  }
+}
 
       function getScrollSpeed(){
         return BASE_SCROLL_SPEED + (Math.floor(score) * SPEED_RAMP / 100);
