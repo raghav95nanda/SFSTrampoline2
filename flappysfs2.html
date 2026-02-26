@@ -31,7 +31,7 @@
     #game-container {
       position: relative;
       width: min(100%, var(--game-max-width));
-      aspect-ratio: 2906 / 632; /* 🔒 keep SVG aspect */
+      aspect-ratio: 2906 / 632; /* keep SVG aspect */
       overflow: hidden;
       border-radius: 16px;
       box-shadow: 0 10px 25px rgba(0,0,0,0.15);
@@ -39,6 +39,9 @@
       -webkit-user-select: none;
       user-select: none;
       -webkit-tap-highlight-color: transparent;
+
+      /* ✅ mobile feel: no scroll/zoom gestures inside the game */
+      touch-action: none;
     }
 
     /* Scrolling background track (two copies of the same SVG) */
@@ -51,6 +54,7 @@
       pointer-events:none;
       will-change: transform;
       z-index: 0;
+      transform: translate3d(0,0,0);
     }
     .bg-slice{
       width:50%;
@@ -70,7 +74,6 @@
       pointer-events: none;
       z-index: 3;
     }
-
     #player-lottie > div { width:100%; height:100%; }
 
     /* HUD */
@@ -117,8 +120,8 @@
       border: none;
       padding: 0;
       cursor: pointer;
+      touch-action: manipulation;
     }
-
     #start-button img { width:min(140px,30vw); }
 
     #start-text { color:#fff; margin-top:10px; text-align:center; padding:0 16px; }
@@ -140,6 +143,7 @@
       color:#fff;
       font-weight:600;
       cursor:pointer;
+      touch-action: manipulation;
     }
 
     .hitbox{position:absolute;pointer-events:none;z-index:2;}
@@ -168,13 +172,13 @@
 
     <!-- OVERLAYS -->
     <div id="start-overlay">
-      <button id="start-button"><img src="Start.svg" alt="Start"></button>
-      <div id="start-text">Tap START to play. Tap the stage to jump.</div>
+      <button id="start-button" type="button"><img src="Start.svg" alt="Start"></button>
+      <div id="start-text">Tap START to play. Tap anywhere to flap.</div>
     </div>
 
     <div id="result-overlay">
       <div id="result-message"></div>
-      <button id="replay-button">Replay</button>
+      <button id="replay-button" type="button">Replay</button>
     </div>
   </div>
 
@@ -184,7 +188,6 @@
 
       /* ---------------- CONFIG ---------------- */
 
-      // Spike rects (relative to SVG)
       const SPIKE_DEFS = [
         { x:0.1170,y:-0.1995,width:0.0211,height:0.5860 },
         { x:0.1413,y:-0.1995,width:0.0211,height:0.5860 },
@@ -208,26 +211,22 @@
 
       const SHOW_DEBUG = false;
 
-      /* Hitbox tuning (kept from your setup) */
       const HITBOX_SHRINK_X = 0.006;
       const HITBOX_SHRINK_Y = 0.04;
 
-      /* Runner physics — softer gravity */
+      /* ✅ slower + floatier (mobile-friendly) */
       const GRAVITY = 450;
       const JUMP_VELOCITY = -260;
       const MAX_FALL_SPEED = 700;
-      
-      /* World scroll — much slower */
-      const BASE_SCROLL_SPEED = 120;  // was 280
-      const SPEED_RAMP = 0;           // keep 0 unless you want gradual speed increase
 
-      /* Pattern repetition (hitboxes) */
-      const SEGMENTS = 3;                // repeat obstacle layout across N screen widths
+      const BASE_SCROLL_SPEED = 110;
+      const SPEED_RAMP = 0;
 
-      /* Scoring (OBSTACLE BASED ONLY) */
+      const SEGMENTS = 3;
+
+      /* ✅ obstacle-based scoring only */
       const POINTS_PER_OBSTACLE = 1;
 
-      /* Ground */
       const GROUND_PADDING = 4;
 
       /* ---------------------------------- */
@@ -266,17 +265,18 @@
         jumpAnim.goToAndStop(0, true);
       });
 
-      function addTap(el, fn){
-        let t = false;
-        el.addEventListener('touchstart', e => { t=true; e.preventDefault(); fn(e); }, {passive:false});
-        el.addEventListener('click', e => { if(t){ t=false; return; } fn(e); });
+      /* ✅ unified input: Pointer Events (best cross-device) */
+      function onPress(el, fn){
+        el.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          fn(e);
+        }, { passive: false });
       }
 
       let state = 'ready';
       let playerX = 0, playerY = 0, velY = 0;
-      let grounded = true;
 
-      let spikes = [];   // scrolling obstacle instances (hitboxes)
+      let spikes = [];
       let invincibleUntil = 0;
       let lastT = null;
 
@@ -296,10 +296,9 @@
 
       function resetPlayer(){
         const gw = gameEl.clientWidth;
-        playerX = gw * 0.10;       // fixed runner X
-        playerY = getGroundY();    // start on ground
+        playerX = gw * 0.10;
+        playerY = getGroundY();
         velY = 0;
-        grounded = true;
         playerEl.style.left = playerX + 'px';
         playerEl.style.top = playerY + 'px';
       }
@@ -312,11 +311,10 @@
         jumpAnim.play();
       }
 
+      /* ✅ flappy-style: tap anytime */
       function jump(){
         if(state !== 'running') return;
-      
-        velY = JUMP_VELOCITY;     // reset upward velocity every tap
-        grounded = false;
+        velY = JUMP_VELOCITY;
         playJumpAnim();
       }
 
@@ -373,32 +371,29 @@
       }
 
       function getScrollSpeed(){
-        // optional ramp with score if SPEED_RAMP > 0
         return BASE_SCROLL_SPEED + (Math.floor(score) * SPEED_RAMP / 100);
       }
 
+      /* ✅ always handle ground/ceiling, only skip spikes while invincible */
       function checkCollisions(){
         const r = getPlayerRect();
-      
+
         // ceiling clamp
         if (r.y < 0) {
           playerY = PLAYER_SIZE / 2;
           velY = 0;
         }
-      
+
         // ground snap
         const groundY = getGroundY();
         if (playerY >= groundY) {
           playerY = groundY;
           velY = 0;
-          grounded = true;
-        } else {
-          grounded = false;
         }
-      
+
         // only skip obstacle collision while invincible
         if (performance.now() < invincibleUntil) return;
-      
+
         for (const s of spikes) {
           if (overlaps(r, s)) return end();
         }
@@ -406,37 +401,36 @@
 
       function loop(t){
         if(lastT == null) lastT = t;
-        const dt = (t - lastT) / 1000;
+        const dt = Math.min(0.033, (t - lastT) / 1000); // ✅ clamp dt (mobile tab hiccups)
         lastT = t;
 
         if(state === 'running'){
           const gw = gameEl.clientWidth;
           const scroll = getScrollSpeed();
 
-          // PLAYER PHYSICS
+          // player physics
           velY += GRAVITY * dt;
           if(velY > MAX_FALL_SPEED) velY = MAX_FALL_SPEED;
           playerY += velY * dt;
 
-          // SCROLL BACKGROUND (visual stage)
+          // scroll background
           bgOffset += scroll * dt;
-          if(bgOffset >= gw) bgOffset -= gw; // wrap every 1 screen width
-          bgTrack.style.transform = `translateX(${-bgOffset}px)`;
+          if(bgOffset >= gw) bgOffset -= gw;
+          bgTrack.style.transform = `translate3d(${-bgOffset}px,0,0)`;
 
-          // MOVE WORLD HITBOXES LEFT
+          // move hitboxes
           const wrapWidth = SEGMENTS * gw;
-          const playerRectLeft = playerX - PLAYER_SIZE/2;
+          const playerRectLeft = (playerX - PLAYER_SIZE/2);
 
           for(const s of spikes){
             s.x -= scroll * dt;
 
-            // obstacle-based scoring: when obstacle fully passes the player
+            // obstacle scoring: when it fully passes the player
             if(!s.passed && (s.x + s.w) < playerRectLeft){
               s.passed = true;
               score += POINTS_PER_OBSTACLE;
             }
 
-            // wrap obstacle to right
             if(s.x + s.w < 0){
               s.x += wrapWidth;
               s.passed = false;
@@ -445,13 +439,12 @@
             s.el.style.left = s.x + 'px';
           }
 
-          // APPLY PLAYER POS
+          // apply player pos
           playerEl.style.left = playerX + 'px';
           playerEl.style.top = playerY + 'px';
 
           checkCollisions();
 
-          // BEST
           if(score > best){
             best = score;
             localStorage.setItem('runner_best', String(Math.floor(best)));
@@ -473,7 +466,7 @@
         setHUD();
 
         bgOffset = 0;
-        bgTrack.style.transform = 'translateX(0px)';
+        bgTrack.style.transform = 'translate3d(0,0,0)';
 
         createScrollingPattern();
         resetPlayer();
@@ -488,7 +481,6 @@
 
         const s = Math.floor(score);
         const b = Math.floor(best);
-
         resultMessage.innerHTML = `Game Over!<br/>Score: <b>${s}</b> · Best: <b>${b}</b>`;
         resultOverlay.style.display = 'flex';
       }
@@ -503,22 +495,30 @@
         setHUD();
 
         bgOffset = 0;
-        bgTrack.style.transform = 'translateX(0px)';
+        bgTrack.style.transform = 'translate3d(0,0,0)';
 
         if(jumpLastFrame != null) jumpAnim.goToAndStop(0, true);
       }
 
       /* EVENTS */
-      addTap(startButton, start);
-      addTap(replayButton, reset);
-      addTap(gameEl, () => state === 'running' && jump());
+      onPress(startButton, (e) => { e.stopPropagation(); start(); });
+      onPress(replayButton, (e) => { e.stopPropagation(); reset(); });
 
-      window.addEventListener('resize', () => {
+      // tap anywhere to jump (but not when overlays are up)
+      onPress(gameEl, () => {
+        if(state === 'running') jump();
+      });
+
+      // ✅ resize/orientation change robustness
+      const handleResize = () => {
         updatePlayerSize();
         createScrollingPattern();
         resetPlayer();
         setHUD();
-      });
+      };
+
+      window.addEventListener('resize', handleResize);
+      window.addEventListener('orientationchange', () => setTimeout(handleResize, 150));
 
       /* INIT */
       updatePlayerSize();
