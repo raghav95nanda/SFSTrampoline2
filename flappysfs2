@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <title>Balloon Runner Game</title>
+
+  <style>
+    :root {
+      --game-max-width: 900px;
+
+      /* Character size knobs */
+      --player-size-desktop: 40px;
+      --player-size-mobile: 18px;
+      --player-size: var(--player-size-desktop);
+    }
+
+    @media (max-width: 768px) {
+      :root { --player-size: var(--player-size-mobile); }
+    }
+
+    body {
+      background: #ffffff;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 40px 0;
+      display: flex;
+      justify-content: center;
+    }
+
+    #game-container {
+      position: relative;
+      width: min(100%, var(--game-max-width));
+      aspect-ratio: 2906 / 632; /* 🔒 keep SVG aspect */
+      overflow: hidden;
+      border-radius: 16px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+      cursor: pointer;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    #stage-bg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      pointer-events: none;
+    }
+
+    #player {
+      position: absolute;
+      width: var(--player-size);
+      height: var(--player-size);
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    #player-lottie > div { width:100%; height:100%; }
+
+    /* Score UI */
+    #hud {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      right: 12px;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      z-index: 4;
+      pointer-events: none;
+    }
+
+    .hud-pill {
+      background: rgba(0,0,0,0.35);
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      font-size: 14px;
+    }
+
+    #start-overlay,
+    #result-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.35);
+      z-index: 5;
+    }
+
+    #result-overlay { display:none; }
+
+    #start-button {
+      background: transparent;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+    }
+
+    #start-button img { width:min(140px,30vw); }
+
+    #start-text { color:#fff; margin-top:10px; }
+
+    #result-message {
+      color:#fff;
+      font-size:28px;
+      margin-bottom:10px;
+      text-align: center;
+      line-height: 1.25;
+      padding: 0 16px;
+    }
+
+    #replay-button {
+      border:none;
+      padding:8px 18px;
+      border-radius:999px;
+      background:#f48120;
+      color:#fff;
+      font-weight:600;
+      cursor:pointer;
+    }
+
+    .hitbox { position:absolute; pointer-events:none; z-index: 1; }
+    .debug-spike { background:rgba(255,0,0,.25); outline:1px solid red; }
+  </style>
+</head>
+
+<body>
+  <div id="game-container">
+    <img id="stage-bg" src="stage.svg"/>
+
+    <div id="hud" aria-hidden="true">
+      <div class="hud-pill" id="score-pill">Score: 0</div>
+      <div class="hud-pill" id="best-pill">Best: 0</div>
+    </div>
+
+    <div id="player">
+      <div id="player-lottie"></div>
+    </div>
+
+    <div id="start-overlay">
+      <button id="start-button"><img src="Start.svg"></button>
+      <div id="start-text">Tap START to play. Tap the stage to jump.</div>
+    </div>
+
+    <div id="result-overlay">
+      <div id="result-message"></div>
+      <button id="replay-button">Replay</button>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+  <script>
+    window.addEventListener('load', () => {
+
+      /* ---------------- CONFIG ---------------- */
+
+      // Spike rects (relative to SVG) — we will REPEAT these as a scrolling pattern
+      const SPIKE_DEFS = [
+        { x:0.1170,y:-0.1995,width:0.0211,height:0.5860 },
+        { x:0.1413,y:-0.1995,width:0.0211,height:0.5860 },
+        { x:0.1639,y:-0.1995,width:0.0211,height:0.5860 },
+
+        { x:0.1834,y:0.7545,width:0.0211,height:0.2518 },
+        { x:0.2077,y:0.7545,width:0.0211,height:0.2518 },
+        { x:0.2303,y:0.7545,width:0.0211,height:0.2518 },
+
+        { x:0.4001,y:-0.0082,width:0.0211,height:0.2518 },
+        { x:0.4243,y:-0.0082,width:0.0211,height:0.2518 },
+        { x:0.4470,y:-0.0082,width:0.0211,height:0.2518 },
+
+        { x:0.5461,y:0.5801,width:0.0211,height:0.5860 },
+        { x:0.5704,y:0.5801,width:0.0211,height:0.5860 },
+        { x:0.5930,y:0.5801,width:0.0211,height:0.5860 },
+
+        { x:0.7401,y:0.4203,width:0.0211,height:0.5860 },
+        { x:0.8497,y:-0.0639,width:0.0211,height:0.5860 }
+      ];
+
+      const SHOW_DEBUG = false;
+
+      /* Hitbox tuning (kept from your setup) */
+      const HITBOX_SHRINK_X = 0.006;
+      const HITBOX_SHRINK_Y = 0.04;
+
+      /* Runner physics */
+      const GRAVITY = 1200;
+      const JUMP_VELOCITY = -520;
+      const MAX_FALL_SPEED = 1400;
+
+      /* World scroll */
+      const BASE_SCROLL_SPEED = 280;     // px/s at score ~0
+      const SPEED_RAMP = 18;             // speed increases slowly with score
+      const SEGMENTS = 3;                // repeat pattern across N screen widths
+
+      /* Scoring */
+      const POINTS_PER_SEC = 10;         // passive score gain
+      const POINTS_PER_OBSTACLE = 5;     // bonus when an obstacle passes you
+
+      /* Ground */
+      const GROUND_PADDING = 4;          // tiny padding above the bottom edge
+
+      /* ---------------------------------- */
+
+      const gameEl = document.getElementById('game-container');
+      const playerEl = document.getElementById('player');
+      const startOverlay = document.getElementById('start-overlay');
+      const resultOverlay = document.getElementById('result-overlay');
+      const resultMessage = document.getElementById('result-message');
+      const startButton = document.getElementById('start-button');
+      const replayButton = document.getElementById('replay-button');
+
+      const scorePill = document.getElementById('score-pill');
+      const bestPill = document.getElementById('best-pill');
+
+      let PLAYER_SIZE = 40;
+      function updatePlayerSize(){
+        PLAYER_SIZE = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--player-size')) || 40;
+      }
+      updatePlayerSize();
+
+      const jumpAnim = lottie.loadAnimation({
+        container: document.getElementById('player-lottie'),
+        renderer:'svg',
+        loop:false,
+        autoplay:false,
+        path:'jump.json'
+      });
+
+      let jumpLastFrame = null;
+      jumpAnim.addEventListener('DOMLoaded', () => {
+        jumpLastFrame = jumpAnim.totalFrames - 1;
+        jumpAnim.goToAndStop(0, true);
+      });
+
+      function addTap(el, fn){
+        let t = false;
+        el.addEventListener('touchstart', e => { t=true; e.preventDefault(); fn(e); }, {passive:false});
+        el.addEventListener('click', e => { if(t){ t=false; return; } fn(e); });
+      }
+
+      let state = 'ready';
+      let playerX = 0, playerY = 0, velY = 0;
+      let grounded = true;
+
+      let spikes = [];   // scrolling obstacle instances
+      let invincibleUntil = 0;
+      let lastT = null;
+
+      let score = 0;
+      let best = Number(localStorage.getItem('runner_best') || 0);
+
+      function setHUD(){
+        scorePill.textContent = `Score: ${Math.floor(score)}`;
+        bestPill.textContent = `Best: ${Math.floor(best)}`;
+      }
+      setHUD();
+
+      function getGroundY(){
+        const gh = gameEl.clientHeight;
+        return gh - (PLAYER_SIZE/2) - GROUND_PADDING;
+      }
+
+      function resetPlayer(){
+        const gw = gameEl.clientWidth;
+        playerX = gw * 0.10;            // fixed runner X
+        playerY = getGroundY();         // start on ground
+        velY = 0;
+        grounded = true;
+        playerEl.style.left = playerX + 'px';
+        playerEl.style.top = playerY + 'px';
+      }
+
+      function playJumpAnim(){
+        if(jumpLastFrame == null) return;
+        jumpAnim.setDirection(-1);
+        jumpAnim.setSpeed(0.9);
+        jumpAnim.goToAndStop(jumpLastFrame, true);
+        jumpAnim.play();
+      }
+
+      function jump(){
+        if(state !== 'running') return;
+        if(!grounded) return;           // runner jump only when grounded
+        velY = JUMP_VELOCITY;
+        grounded = false;
+        playJumpAnim();
+      }
+
+      function getPlayerRect(){
+        return {
+          x: playerX - PLAYER_SIZE/2,
+          y: playerY - PLAYER_SIZE/2,
+          w: PLAYER_SIZE,
+          h: PLAYER_SIZE
+        };
+      }
+
+      function overlaps(a,b){
+        return !(a.x+a.w < b.x || a.x > b.x+b.w || a.y+a.h < b.y || a.y > b.y+b.h);
+      }
+
+      function clearSpikes(){
+        spikes.forEach(s => s.el.remove());
+        spikes = [];
+      }
+
+      function createScrollingPattern(){
+        clearSpikes();
+
+        const gw = gameEl.clientWidth;
+        const gh = gameEl.clientHeight;
+
+        // Build N segments worth of the same spike layout
+        for(let seg = 0; seg < SEGMENTS; seg++){
+          const segOffset = seg * gw;
+
+          for(const d of SPIKE_DEFS){
+            const el = document.createElement('div');
+            el.className = 'hitbox' + (SHOW_DEBUG ? ' debug-spike' : '');
+            gameEl.appendChild(el);
+
+            const rawX = d.x * gw + segOffset;
+            const rawY = d.y * gh;
+            const rawW = d.width * gw;
+            const rawH = d.height * gh;
+
+            const x = rawX + HITBOX_SHRINK_X * gw;
+            const y = rawY + HITBOX_SHRINK_Y * gh;
+            const w = Math.max(0, rawW - 2*HITBOX_SHRINK_X*gw);
+            const h = Math.max(0, rawH - 2*HITBOX_SHRINK_Y*gh);
+
+            el.style.left = x + 'px';
+            el.style.top = y + 'px';
+            el.style.width = w + 'px';
+            el.style.height = h + 'px';
+
+            spikes.push({
+              x, y, w, h,
+              el,
+              passed: false
+            });
+          }
+        }
+      }
+
+      function getScrollSpeed(){
+        // gentle ramp with score
+        return BASE_SCROLL_SPEED + (Math.floor(score) * SPEED_RAMP / 100);
+      }
+
+      function checkCollisions(){
+        if(performance.now() < invincibleUntil) return;
+
+        const r = getPlayerRect();
+
+        // Ceiling clamp (optional)
+        if(r.y < 0){
+          playerY = PLAYER_SIZE/2;
+          velY = 0;
+        }
+
+        for(const s of spikes){
+          if(overlaps(r, s)) return end();
+        }
+
+        // Ground handling
+        const groundY = getGroundY();
+        if(playerY >= groundY){
+          playerY = groundY;
+          velY = 0;
+          grounded = true;
+        } else {
+          grounded = false;
+        }
+      }
+
+      function loop(t){
+        if(lastT == null) lastT = t;
+        const dt = (t - lastT) / 1000;
+        lastT = t;
+
+        if(state === 'running'){
+          const gw = gameEl.clientWidth;
+          const scroll = getScrollSpeed();
+
+          // score
+          score += POINTS_PER_SEC * dt;
+
+          // player physics
+          velY += GRAVITY * dt;
+          if(velY > MAX_FALL_SPEED) velY = MAX_FALL_SPEED;
+          playerY += velY * dt;
+
+          // move world left
+          const wrapWidth = SEGMENTS * gw;
+
+          const playerRectLeft = playerX - PLAYER_SIZE/2;
+
+          for(const s of spikes){
+            s.x -= scroll * dt;
+
+            // bonus when obstacle fully passes the player
+            if(!s.passed && (s.x + s.w) < playerRectLeft){
+              s.passed = true;
+              score += POINTS_PER_OBSTACLE;
+            }
+
+            // wrap to the right
+            if(s.x + s.w < 0){
+              s.x += wrapWidth;
+              s.passed = false;
+            }
+
+            s.el.style.left = s.x + 'px';
+          }
+
+          playerEl.style.left = playerX + 'px';
+          playerEl.style.top = playerY + 'px';
+
+          checkCollisions();
+
+          if(score > best){
+            best = score;
+            localStorage.setItem('runner_best', String(Math.floor(best)));
+          }
+
+          setHUD();
+        }
+
+        requestAnimationFrame(loop);
+      }
+
+      function start(){
+        state = 'running';
+        resultOverlay.style.display = 'none';
+        startOverlay.style.display = 'none';
+
+        score = 0;
+        best = Number(localStorage.getItem('runner_best') || 0);
+        setHUD();
+
+        // re-create pattern so it always starts aligned
+        createScrollingPattern();
+        resetPlayer();
+
+        lastT = null;
+        invincibleUntil = performance.now() + 600;
+      }
+
+      function end(){
+        if(state !== 'running') return;
+        state = 'dead';
+
+        const s = Math.floor(score);
+        const b = Math.floor(best);
+
+        resultMessage.innerHTML = `Game Over!<br/>Score: <b>${s}</b> · Best: <b>${b}</b>`;
+        resultOverlay.style.display = 'flex';
+      }
+
+      function reset(){
+        state = 'ready';
+        resetPlayer();
+        resultOverlay.style.display = 'none';
+        startOverlay.style.display = 'flex';
+        score = 0;
+        setHUD();
+        if(jumpLastFrame != null) jumpAnim.goToAndStop(0, true);
+      }
+
+      /* EVENTS */
+      addTap(startButton, start);
+      addTap(replayButton, reset);
+      addTap(gameEl, () => state === 'running' && jump());
+
+      window.addEventListener('resize', () => {
+        updatePlayerSize();
+        createScrollingPattern();
+        resetPlayer();
+        setHUD();
+      });
+
+      /* INIT */
+      updatePlayerSize();
+      createScrollingPattern();
+      resetPlayer();
+      requestAnimationFrame(loop);
+    });
+  </script>
+</body>
+</html>
