@@ -45,8 +45,8 @@
     /* Mobile: make the game taller */
 @media (max-width: 768px) {
   #game-container {
-    aspect-ratio: 9 / 16;   /* taller play area */
-    max-height: 90vh;       /* avoid overflow */
+    aspect-ratio: 16 / 9;   /* taller than desktop, but not huge */
+    height: min(360px, 55vh); /* cap it so it doesn’t blow up */
   }
 }
 
