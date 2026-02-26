@@ -28,18 +28,25 @@
       justify-content: center;
     }
 
-/* Desktop ratio (cinematic wide) */
-@media (min-width: 769px) {
-  #game-container {
-    aspect-ratio: 2906 / 632;
-  }
+#game-container {
+  position: relative;
+  width: min(100%, var(--game-max-width));
+  aspect-ratio: 2906 / 632;  /* KEEP THIS */
+  overflow: hidden;
+  border-radius: 16px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
 }
 
-/* Mobile ratio (taller & playable) */
+    /* Mobile: make the game taller */
 @media (max-width: 768px) {
   #game-container {
-    aspect-ratio: 9 / 16;       /* much taller */
-    max-height: 85vh;           /* prevent overflow */
+    aspect-ratio: 9 / 16;   /* taller play area */
+    max-height: 90vh;       /* avoid overflow */
   }
 }
 
