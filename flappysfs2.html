@@ -213,9 +213,9 @@
       const HITBOX_SHRINK_Y = 0.04;
 
       /* Runner physics — softer gravity */
-      const GRAVITY = 550;        // was 1200
-      const JUMP_VELOCITY = -300; // slightly softer jump
-      const MAX_FALL_SPEED = 800; // lower terminal velocity
+      const GRAVITY = 450;
+      const JUMP_VELOCITY = -260;
+      const MAX_FALL_SPEED = 700;
       
       /* World scroll — much slower */
       const BASE_SCROLL_SPEED = 120;  // was 280
@@ -315,13 +315,7 @@
       function jump(){
         if(state !== 'running') return;
       
-        const groundY = getGroundY();
-        const nearGround = playerY >= (groundY - 2); // small tolerance
-      
-        if(!grounded && !nearGround) return;
-      
-        playerY = Math.min(playerY, groundY); // ensure we're not "below" ground
-        velY = JUMP_VELOCITY;
+        velY = JUMP_VELOCITY;     // reset upward velocity every tap
         grounded = false;
         playJumpAnim();
       }
@@ -383,32 +377,32 @@
         return BASE_SCROLL_SPEED + (Math.floor(score) * SPEED_RAMP / 100);
       }
 
-    function checkCollisions(){
-      const r = getPlayerRect();
-    
-      // Always handle ceiling clamp
-      if (r.y < 0) {
-        playerY = PLAYER_SIZE / 2;
-        velY = 0;
+      function checkCollisions(){
+        const r = getPlayerRect();
+      
+        // ceiling clamp
+        if (r.y < 0) {
+          playerY = PLAYER_SIZE / 2;
+          velY = 0;
+        }
+      
+        // ground snap
+        const groundY = getGroundY();
+        if (playerY >= groundY) {
+          playerY = groundY;
+          velY = 0;
+          grounded = true;
+        } else {
+          grounded = false;
+        }
+      
+        // only skip obstacle collision while invincible
+        if (performance.now() < invincibleUntil) return;
+      
+        for (const s of spikes) {
+          if (overlaps(r, s)) return end();
+        }
       }
-    
-      // Always handle ground snap + grounded state
-      const groundY = getGroundY();
-      if (playerY >= groundY) {
-        playerY = groundY;
-        velY = 0;
-        grounded = true;
-      } else {
-        grounded = false;
-      }
-    
-      // Only skip obstacle collision while invincible
-      if (performance.now() < invincibleUntil) return;
-    
-      for (const s of spikes) {
-        if (overlaps(r, s)) return end();
-      }
-    }
 
       function loop(t){
         if(lastT == null) lastT = t;
