@@ -377,31 +377,32 @@
         return BASE_SCROLL_SPEED + (Math.floor(score) * SPEED_RAMP / 100);
       }
 
-      function checkCollisions(){
-        if(performance.now() < invincibleUntil) return;
-
-        const r = getPlayerRect();
-
-        // Ceiling clamp
-        if(r.y < 0){
-          playerY = PLAYER_SIZE/2;
-          velY = 0;
-        }
-
-        for(const s of spikes){
-          if(overlaps(r, s)) return end();
-        }
-
-        // Ground snap
-        const groundY = getGroundY();
-        if(playerY >= groundY){
-          playerY = groundY;
-          velY = 0;
-          grounded = true;
-        } else {
-          grounded = false;
-        }
+    function checkCollisions(){
+      const r = getPlayerRect();
+    
+      // Always handle ceiling clamp
+      if (r.y < 0) {
+        playerY = PLAYER_SIZE / 2;
+        velY = 0;
       }
+    
+      // Always handle ground snap + grounded state
+      const groundY = getGroundY();
+      if (playerY >= groundY) {
+        playerY = groundY;
+        velY = 0;
+        grounded = true;
+      } else {
+        grounded = false;
+      }
+    
+      // Only skip obstacle collision while invincible
+      if (performance.now() < invincibleUntil) return;
+    
+      for (const s of spikes) {
+        if (overlaps(r, s)) return end();
+      }
+    }
 
       function loop(t){
         if(lastT == null) lastT = t;
