@@ -28,21 +28,20 @@
       justify-content: center;
     }
 
-    #game-container {
-      position: relative;
-      width: min(100%, var(--game-max-width));
-      aspect-ratio: 2906 / 632; /* keep SVG aspect */
-      overflow: hidden;
-      border-radius: 16px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
-      cursor: pointer;
-      -webkit-user-select: none;
-      user-select: none;
-      -webkit-tap-highlight-color: transparent;
+/* Desktop ratio (cinematic wide) */
+@media (min-width: 769px) {
+  #game-container {
+    aspect-ratio: 2906 / 632;
+  }
+}
 
-      /* ✅ mobile feel: no scroll/zoom gestures inside the game */
-      touch-action: none;
-    }
+/* Mobile ratio (taller & playable) */
+@media (max-width: 768px) {
+  #game-container {
+    aspect-ratio: 9 / 16;       /* much taller */
+    max-height: 85vh;           /* prevent overflow */
+  }
+}
 
     /* Scrolling background track (two copies of the same SVG) */
     #bg-track{
