@@ -41,13 +41,25 @@
       -webkit-tap-highlight-color: transparent;
     }
 
-    #stage-bg {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      pointer-events: none;
+    /* Scrolling background track (two copies of the same SVG) */
+    #bg-track{
+      position:absolute;
+      inset:0;
+      display:flex;
+      width:200%;
+      height:100%;
+      pointer-events:none;
+      will-change: transform;
+      z-index: 0;
+    }
+    .bg-slice{
+      width:50%;
+      height:100%;
+      object-fit:cover;
+      flex:0 0 50%;
+      pointer-events:none;
+      user-select:none;
+      -webkit-user-drag:none;
     }
 
     #player {
@@ -56,12 +68,12 @@
       height: var(--player-size);
       transform: translate(-50%, -50%);
       pointer-events: none;
-      z-index: 2;
+      z-index: 3;
     }
 
     #player-lottie > div { width:100%; height:100%; }
 
-    /* Score UI */
+    /* HUD */
     #hud {
       position: absolute;
       top: 12px;
@@ -109,7 +121,7 @@
 
     #start-button img { width:min(140px,30vw); }
 
-    #start-text { color:#fff; margin-top:10px; }
+    #start-text { color:#fff; margin-top:10px; text-align:center; padding:0 16px; }
 
     #result-message {
       color:#fff;
@@ -130,26 +142,33 @@
       cursor:pointer;
     }
 
-    .hitbox { position:absolute; pointer-events:none; z-index: 1; }
-    .debug-spike { background:rgba(255,0,0,.25); outline:1px solid red; }
+    .hitbox{position:absolute;pointer-events:none;z-index:2;}
+    .debug-spike{background:rgba(255,0,0,.25);outline:1px solid red;}
   </style>
 </head>
 
 <body>
   <div id="game-container">
-    <img id="stage-bg" src="stage.svg"/>
+    <!-- SCROLLING STAGE -->
+    <div id="bg-track" aria-hidden="true">
+      <img class="bg-slice" src="stage.svg" alt="">
+      <img class="bg-slice" src="stage.svg" alt="">
+    </div>
 
+    <!-- HUD -->
     <div id="hud" aria-hidden="true">
       <div class="hud-pill" id="score-pill">Score: 0</div>
       <div class="hud-pill" id="best-pill">Best: 0</div>
     </div>
 
+    <!-- PLAYER -->
     <div id="player">
       <div id="player-lottie"></div>
     </div>
 
+    <!-- OVERLAYS -->
     <div id="start-overlay">
-      <button id="start-button"><img src="Start.svg"></button>
+      <button id="start-button"><img src="Start.svg" alt="Start"></button>
       <div id="start-text">Tap START to play. Tap the stage to jump.</div>
     </div>
 
@@ -165,7 +184,7 @@
 
       /* ---------------- CONFIG ---------------- */
 
-      // Spike rects (relative to SVG) — we will REPEAT these as a scrolling pattern
+      // Spike rects (relative to SVG)
       const SPIKE_DEFS = [
         { x:0.1170,y:-0.1995,width:0.0211,height:0.5860 },
         { x:0.1413,y:-0.1995,width:0.0211,height:0.5860 },
@@ -199,16 +218,17 @@
       const MAX_FALL_SPEED = 1400;
 
       /* World scroll */
-      const BASE_SCROLL_SPEED = 280;     // px/s at score ~0
-      const SPEED_RAMP = 18;             // speed increases slowly with score
-      const SEGMENTS = 3;                // repeat pattern across N screen widths
+      const BASE_SCROLL_SPEED = 280;     // px/s
+      const SPEED_RAMP = 0;              // keep 0 if you want constant speed
 
-      /* Scoring */
-      const POINTS_PER_SEC = 10;         // passive score gain
-      const POINTS_PER_OBSTACLE = 5;     // bonus when an obstacle passes you
+      /* Pattern repetition (hitboxes) */
+      const SEGMENTS = 3;                // repeat obstacle layout across N screen widths
+
+      /* Scoring (OBSTACLE BASED ONLY) */
+      const POINTS_PER_OBSTACLE = 1;
 
       /* Ground */
-      const GROUND_PADDING = 4;          // tiny padding above the bottom edge
+      const GROUND_PADDING = 4;
 
       /* ---------------------------------- */
 
@@ -222,6 +242,9 @@
 
       const scorePill = document.getElementById('score-pill');
       const bestPill = document.getElementById('best-pill');
+
+      const bgTrack = document.getElementById('bg-track');
+      let bgOffset = 0;
 
       let PLAYER_SIZE = 40;
       function updatePlayerSize(){
@@ -253,7 +276,7 @@
       let playerX = 0, playerY = 0, velY = 0;
       let grounded = true;
 
-      let spikes = [];   // scrolling obstacle instances
+      let spikes = [];   // scrolling obstacle instances (hitboxes)
       let invincibleUntil = 0;
       let lastT = null;
 
@@ -273,8 +296,8 @@
 
       function resetPlayer(){
         const gw = gameEl.clientWidth;
-        playerX = gw * 0.10;            // fixed runner X
-        playerY = getGroundY();         // start on ground
+        playerX = gw * 0.10;       // fixed runner X
+        playerY = getGroundY();    // start on ground
         velY = 0;
         grounded = true;
         playerEl.style.left = playerX + 'px';
@@ -291,7 +314,7 @@
 
       function jump(){
         if(state !== 'running') return;
-        if(!grounded) return;           // runner jump only when grounded
+        if(!grounded) return;
         velY = JUMP_VELOCITY;
         grounded = false;
         playJumpAnim();
@@ -321,7 +344,6 @@
         const gw = gameEl.clientWidth;
         const gh = gameEl.clientHeight;
 
-        // Build N segments worth of the same spike layout
         for(let seg = 0; seg < SEGMENTS; seg++){
           const segOffset = seg * gw;
 
@@ -345,17 +367,13 @@
             el.style.width = w + 'px';
             el.style.height = h + 'px';
 
-            spikes.push({
-              x, y, w, h,
-              el,
-              passed: false
-            });
+            spikes.push({ x, y, w, h, el, passed:false });
           }
         }
       }
 
       function getScrollSpeed(){
-        // gentle ramp with score
+        // optional ramp with score if SPEED_RAMP > 0
         return BASE_SCROLL_SPEED + (Math.floor(score) * SPEED_RAMP / 100);
       }
 
@@ -364,7 +382,7 @@
 
         const r = getPlayerRect();
 
-        // Ceiling clamp (optional)
+        // Ceiling clamp
         if(r.y < 0){
           playerY = PLAYER_SIZE/2;
           velY = 0;
@@ -374,7 +392,7 @@
           if(overlaps(r, s)) return end();
         }
 
-        // Ground handling
+        // Ground snap
         const groundY = getGroundY();
         if(playerY >= groundY){
           playerY = groundY;
@@ -394,29 +412,30 @@
           const gw = gameEl.clientWidth;
           const scroll = getScrollSpeed();
 
-          // score
-          score += POINTS_PER_SEC * dt;
-
-          // player physics
+          // PLAYER PHYSICS
           velY += GRAVITY * dt;
           if(velY > MAX_FALL_SPEED) velY = MAX_FALL_SPEED;
           playerY += velY * dt;
 
-          // move world left
-          const wrapWidth = SEGMENTS * gw;
+          // SCROLL BACKGROUND (visual stage)
+          bgOffset += scroll * dt;
+          if(bgOffset >= gw) bgOffset -= gw; // wrap every 1 screen width
+          bgTrack.style.transform = `translateX(${-bgOffset}px)`;
 
+          // MOVE WORLD HITBOXES LEFT
+          const wrapWidth = SEGMENTS * gw;
           const playerRectLeft = playerX - PLAYER_SIZE/2;
 
           for(const s of spikes){
             s.x -= scroll * dt;
 
-            // bonus when obstacle fully passes the player
+            // obstacle-based scoring: when obstacle fully passes the player
             if(!s.passed && (s.x + s.w) < playerRectLeft){
               s.passed = true;
               score += POINTS_PER_OBSTACLE;
             }
 
-            // wrap to the right
+            // wrap obstacle to right
             if(s.x + s.w < 0){
               s.x += wrapWidth;
               s.passed = false;
@@ -425,11 +444,13 @@
             s.el.style.left = s.x + 'px';
           }
 
+          // APPLY PLAYER POS
           playerEl.style.left = playerX + 'px';
           playerEl.style.top = playerY + 'px';
 
           checkCollisions();
 
+          // BEST
           if(score > best){
             best = score;
             localStorage.setItem('runner_best', String(Math.floor(best)));
@@ -450,7 +471,9 @@
         best = Number(localStorage.getItem('runner_best') || 0);
         setHUD();
 
-        // re-create pattern so it always starts aligned
+        bgOffset = 0;
+        bgTrack.style.transform = 'translateX(0px)';
+
         createScrollingPattern();
         resetPlayer();
 
@@ -474,8 +497,13 @@
         resetPlayer();
         resultOverlay.style.display = 'none';
         startOverlay.style.display = 'flex';
+
         score = 0;
         setHUD();
+
+        bgOffset = 0;
+        bgTrack.style.transform = 'translateX(0px)';
+
         if(jumpLastFrame != null) jumpAnim.goToAndStop(0, true);
       }
 
